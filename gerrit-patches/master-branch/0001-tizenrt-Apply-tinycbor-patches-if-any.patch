@@ -1,0 +1,48 @@
+From 2de850d44543cf854f091ac677e457790f429ca3 Mon Sep 17 00:00:00 2001
+From: Philippe Coval <p.coval@samsung.com>
+Date: Mon, 25 Jun 2018 13:01:35 +0200
+Subject: [PATCH] tizenrt: Apply tinycbor patches if any
+
+Note, patches should be shared upstream first,
+then can be placed in staged area here.
+
+Bug: https://jira.iotivity.org/projects/LITE/issues/LITE-4
+Change-Id: I6492751a10704d1991a73aa9599f669d77a5233c
+Signed-off-by: Philippe Coval <p.coval@samsung.com>
+Reviewed-on: https://gerrit.iotivity.org/gerrit/25951
+Tested-by: IoTivity Jenkins <jenkins-daemon@iotivity.org>
+Reviewed-by: Uze Choi <uzchoi@samsung.com>
+(cherry picked from commit 82be045fa5af8e75c181939746b284a5d8c60304)
+---
+ tests/port/tizenrt/Makefile | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/tests/port/tizenrt/Makefile b/tests/port/tizenrt/Makefile
+index 6acd7034..ee64c316 100644
+--- a/tests/port/tizenrt/Makefile
++++ b/tests/port/tizenrt/Makefile
+@@ -55,6 +55,7 @@ prep_files+=${CC}
+ prep_files+=${tizenrt_dir}/external/iotivity-constrained.Kconfig.tmp
+ prep_files+=${tizenrt_dir}/external/iotivity-constrained.mk.tmp
+ prep_files+=${top_dir}/deps/tinycbor/LICENSE
++prep_files+=${top_dir}/deps/tinycbor/tmp/done.log
+ 
+ all?=prep configure build
+ 
+@@ -74,6 +75,13 @@ ${os_external_makefile}.orig: ${os_external_makefile}
+ ${top_dir}/deps/tinycbor/%:
+ 	${MAKE} -C "${top_dir}/tests" prep
+ 
++tinycbor_patches?=$(sort $(wildcard ${top_dir}/patches/tinycbor/*.patch))
++${top_dir}/deps/tinycbor/tmp/done.log: ${top_dir}/deps/tinycbor/. ${tinycbor_patches}
++	cd ${<D} && for patch in ${tinycbor_patches} ; do patch -r - -s -N -p1 < $${patch} ; done
++	mkdir -p ${@D}
++	echo "Patches applied in $^" > ${@}
++
++
+ ${tizenrt_dir}/external/iotivity-constrained.Kconfig.tmp: ${CURDIR}/iotivity-constrained.Kconfig ${tizenrt_dir}
+ 	grep 'iotivity-constrained' "${tizenrt_dir}/external/Kconfig" \
+   || echo "source \"$<\"" >> "${tizenrt_dir}/external/Kconfig"
+-- 
+2.16.1.windows.1
+

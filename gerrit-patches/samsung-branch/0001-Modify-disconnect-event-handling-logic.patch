@@ -1,0 +1,145 @@
+From af8f797fdf5985b92f752dd789c2b4b439a26d8a Mon Sep 17 00:00:00 2001
+From: Jaehyun Cho <jaehyun3.cho@samsung.com>
+Date: Mon, 25 Mar 2019 08:53:59 +0900
+Subject: [PATCH] Modify disconnect event handling logic.
+
+As-is:
+When stack got session disconnect event, observer client will
+be removed after 3 seconds delay. It can make problem
+if notify response is celled during that time.
+To-be:
+observer client will removed directly after disconnect event
+occur. event(which is app callback) and (d)tls peer remove logic
+will delayed 3 seconds.
+
+Change-Id: I0effdba3858fb43d9885356a9b23947dd1d1f3ac
+Signed-off-by: Jaehyun Cho <jaehyun3.cho@samsung.com>
+Reviewed-on: https://gerrit.iotivity.org/gerrit/29347
+Tested-by: IoTivity Jenkins <jenkins-daemon@iotivity.org>
+Reviewed-by: Jaehong Jo <jaehong.jo@samsung.com>
+Reviewed-by: Kishen Maloor <kishen.maloor@intel.com>
+---
+ api/oc_session_events.c     | 53 ++++++++++++++++++++++++++++-----------------
+ include/oc_session_events.h |  1 -
+ security/oc_tls.c           |  4 ++--
+ 3 files changed, 35 insertions(+), 23 deletions(-)
+
+diff --git a/api/oc_session_events.c b/api/oc_session_events.c
+index 3f6d1de2..3ac86257 100644
+--- a/api/oc_session_events.c
++++ b/api/oc_session_events.c
+@@ -34,6 +34,23 @@
+ OC_LIST(session_start_events);
+ OC_LIST(session_end_events);
+ 
++static void
++oc_handle_session(oc_endpoint_t *endpoint, oc_session_state_t state)
++{
++  (void)endpoint;
++  (void)state;
++  if (state == OC_SESSION_DISCONNECTED) {
++#ifdef OC_SECURITY
++    if (endpoint->flags & SECURED && endpoint->flags & TCP) {
++      oc_tls_remove_peer(endpoint);
++    }
++#endif /* OC_SECURITY */
++  }
++#ifdef OC_SESSION_EVENTS
++  handle_session_event_callback(endpoint, state);
++#endif /* OC_SESSION_EVENTS */
++}
++
+ static oc_event_callback_retval_t
+ free_session_state_delayed(void *data)
+ {
+@@ -50,6 +67,14 @@ free_session_state_delayed(void *data)
+   return OC_EVENT_DONE;
+ }
+ 
++#ifdef OC_SERVER
++static void
++remove_observers(oc_endpoint_t *endpoint)
++{
++  coap_remove_observer_by_client(endpoint);
++}
++#endif /* OC_SERVER */
++
+ static void
+ oc_process_session_event(void)
+ {
+@@ -64,6 +89,14 @@ oc_process_session_event(void)
+     session_event = oc_list_pop(session_start_events);
+   }
+ 
++#ifdef OC_SERVER
++  session_event = (oc_endpoint_t *)oc_list_head(session_end_events);
++  while (session_event != NULL) {
++    remove_observers(session_event);
++    session_event = oc_list_item_next(session_event);
++  }
++#endif /* OC_SERVER */
++
+   if (oc_list_length(session_end_events) > 0) {
+     oc_set_delayed_callback(NULL, &free_session_state_delayed,
+                             SESSION_STATE_FREE_DELAY_SECS);
+@@ -122,23 +155,3 @@ oc_session_end_event(oc_endpoint_t *endpoint)
+   _oc_signal_event_loop();
+ }
+ #endif /* OC_TCP */
+-
+-void
+-oc_handle_session(oc_endpoint_t *endpoint, oc_session_state_t state)
+-{
+-  if (state == OC_SESSION_DISCONNECTED) {
+-#ifdef OC_SERVER
+-    coap_remove_observer_by_client(endpoint);
+-#else  /* OC_SERVER */
+-    (void)endpoint;
+-#endif /* !OC_SERVER */
+-#ifdef OC_SECURITY
+-    if (endpoint->flags & SECURED && endpoint->flags & TCP) {
+-      oc_tls_remove_peer(endpoint);
+-    }
+-#endif /* OC_SECURITY */
+-  }
+-#ifdef OC_SESSION_EVENTS
+-  handle_session_event_callback(endpoint, state);
+-#endif /* OC_SESSION_EVENTS */
+-}
+diff --git a/include/oc_session_events.h b/include/oc_session_events.h
+index 0fa37efa..72952f11 100644
+--- a/include/oc_session_events.h
++++ b/include/oc_session_events.h
+@@ -51,7 +51,6 @@ OC_PROCESS_NAME(oc_session_events);
+ 
+ void oc_session_start_event(oc_endpoint_t *endpoint);
+ void oc_session_end_event(oc_endpoint_t *endpoint);
+-void oc_handle_session(oc_endpoint_t *endpoint, oc_session_state_t state);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/security/oc_tls.c b/security/oc_tls.c
+index 0b7e5e59..a84ece56 100644
+--- a/security/oc_tls.c
++++ b/security/oc_tls.c
+@@ -175,7 +175,7 @@ oc_tls_free_peer(oc_tls_peer_t *peer, bool inactivity_cb)
+   } else
+ #endif /* OC_TCP */
+   {
+-    oc_handle_session(&peer->endpoint, OC_SESSION_DISCONNECTED);
++    oc_session_end_event(&peer->endpoint);
+   }
+ 
+   if (!inactivity_cb) {
+@@ -1632,7 +1632,7 @@ read_application_data(oc_tls_peer_t *peer)
+       {
+         /* No public key information for non-certificate-using ciphersuites. */
+       }
+-      oc_handle_session(&peer->endpoint, OC_SESSION_CONNECTED);
++      oc_session_start_event(&peer->endpoint);
+     }
+ #ifdef OC_CLIENT
+     if (ret == 0) {
+-- 
+2.16.1.windows.1
+

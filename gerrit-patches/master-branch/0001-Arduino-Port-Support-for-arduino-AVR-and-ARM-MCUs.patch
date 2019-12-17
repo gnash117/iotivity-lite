@@ -1,0 +1,4617 @@
+From 2dfcd513ae07cd8a03ab642e949905821648ae83 Mon Sep 17 00:00:00 2001
+From: Yann Stephen Mandza <yann@tlabs.ac.za>
+Date: Sat, 20 Apr 2019 21:59:31 +0200
+Subject: [PATCH] Arduino Port: Support for arduino AVR and ARM MCUs
+
+The port target the arduino AVR (Mega2560) and ARM architectures.
+Mostly arduino SAMD(arduino MKRZERO). However, any SAMD board
+should work as well as  the arduino Due. The ipadapter for network
+connectivity uses  Wiznet w5500 based shield( thus only IPV4 Ethernet
+is supported as yet),required  arduino C++ libraries were adapted by
+providing C wrappers. A FAT32 SD card is used to provide pesistant
+storage for security build.
+
+Note: iotivility lite stack have shown heavy  for the AVR
+architecture. Thus the port allows the use of external
+memory SRAM (up to 56KBytes).
+
+Bug: https://github.com/yannS2016/iotivity-constrained-arduino/issues
+
+Change-Id: I6c746d7f03689d925522115536f90a895dff3a9b
+Signed-off-by: Yann Stephen Mandza <yann@tlabs.ac.za>
+---
+ apps/client_arduino.cpp                    | 318 +++++++++++++++++++++++++++
+ apps/server_arduino.cpp                    | 204 +++++++++++++++++
+ port/arduino/Makefile                      | 124 +++++++++++
+ port/arduino/README.md                     | 174 +++++++++++++++
+ port/arduino/adapter/Makefile              | 107 +++++++++
+ port/arduino/adapter/abort.c               |  32 +++
+ port/arduino/adapter/ethadapter_utils.c    | 274 +++++++++++++++++++++++
+ port/arduino/adapter/ethadapter_utils.h    | 119 ++++++++++
+ port/arduino/adapter/ipadapter.c           | 318 +++++++++++++++++++++++++++
+ port/arduino/adapter/ipcontext.h           |  58 +++++
+ port/arduino/adapter/oc_clock.c            |  96 ++++++++
+ port/arduino/adapter/oc_config.h           |  93 ++++++++
+ port/arduino/adapter/random.c              |  95 ++++++++
+ port/arduino/adapter/storage.c             | 102 +++++++++
+ port/arduino/arm_tools_cores.PNG           | Bin 0 -> 16219 bytes
+ port/arduino/avr.mk                        |  81 +++++++
+ port/arduino/build_arduino.sh              | 200 +++++++++++++++++
+ port/arduino/deps/Time/Makefile            |  20 ++
+ port/arduino/deps/pRNG/Makefile            |  21 ++
+ port/arduino/deps/pRNG/prng.cpp            |  58 +++++
+ port/arduino/deps/pRNG/prng.h              |  25 +++
+ port/arduino/deps/sdFat/Makefile           |  24 ++
+ port/arduino/deps/sdFat/sdfat.cpp          | 173 +++++++++++++++
+ port/arduino/deps/sdFat/sdfat.h            | 139 ++++++++++++
+ port/arduino/deps/serial/Makefile          |  21 ++
+ port/arduino/deps/serial/serial.cpp        | 115 ++++++++++
+ port/arduino/deps/serial/serial.h          |  40 ++++
+ port/arduino/deps/wiz5500/Makefile         |  23 ++
+ port/arduino/deps/wiz5500/Wiz5500.cpp      | 100 +++++++++
+ port/arduino/deps/wiz5500/Wiz5500.h        |  65 ++++++
+ port/arduino/patches/Ethernet2.patch       | 141 ++++++++++++
+ port/arduino/patches/Time.patch            | 338 +++++++++++++++++++++++++++++
+ port/arduino/patches/arduino-mk.patch      |  11 +
+ port/arduino/patches/iotivity_lite.patch   | 122 +++++++++++
+ port/arduino/patches/mbedtls_arduino.patch |  38 ++++
+ port/arduino/patches/samd_random.patch     |  22 ++
+ port/arduino/sam.mk                        |  31 +++
+ port/arduino/samd.mk                       |  30 +++
+ port/arduino/setup.mk                      |  42 ++++
+ 39 files changed, 3994 insertions(+)
+ create mode 100644 apps/client_arduino.cpp
+ create mode 100644 apps/server_arduino.cpp
+ create mode 100644 port/arduino/Makefile
+ create mode 100644 port/arduino/README.md
+ create mode 100644 port/arduino/adapter/Makefile
+ create mode 100644 port/arduino/adapter/abort.c
+ create mode 100644 port/arduino/adapter/ethadapter_utils.c
+ create mode 100644 port/arduino/adapter/ethadapter_utils.h
+ create mode 100644 port/arduino/adapter/ipadapter.c
+ create mode 100644 port/arduino/adapter/ipcontext.h
+ create mode 100644 port/arduino/adapter/oc_clock.c
+ create mode 100644 port/arduino/adapter/oc_config.h
+ create mode 100644 port/arduino/adapter/random.c
+ create mode 100644 port/arduino/adapter/storage.c
+ create mode 100755 port/arduino/arm_tools_cores.PNG
+ create mode 100644 port/arduino/avr.mk
+ create mode 100755 port/arduino/build_arduino.sh
+ create mode 100644 port/arduino/deps/Time/Makefile
+ create mode 100644 port/arduino/deps/pRNG/Makefile
+ create mode 100644 port/arduino/deps/pRNG/prng.cpp
+ create mode 100644 port/arduino/deps/pRNG/prng.h
+ create mode 100644 port/arduino/deps/sdFat/Makefile
+ create mode 100644 port/arduino/deps/sdFat/sdfat.cpp
+ create mode 100644 port/arduino/deps/sdFat/sdfat.h
+ create mode 100644 port/arduino/deps/serial/Makefile
+ create mode 100644 port/arduino/deps/serial/serial.cpp
+ create mode 100644 port/arduino/deps/serial/serial.h
+ create mode 100644 port/arduino/deps/wiz5500/Makefile
+ create mode 100644 port/arduino/deps/wiz5500/Wiz5500.cpp
+ create mode 100644 port/arduino/deps/wiz5500/Wiz5500.h
+ create mode 100644 port/arduino/patches/Ethernet2.patch
+ create mode 100644 port/arduino/patches/Time.patch
+ create mode 100644 port/arduino/patches/arduino-mk.patch
+ create mode 100644 port/arduino/patches/iotivity_lite.patch
+ create mode 100644 port/arduino/patches/mbedtls_arduino.patch
+ create mode 100644 port/arduino/patches/samd_random.patch
+ create mode 100644 port/arduino/sam.mk
+ create mode 100644 port/arduino/samd.mk
+ create mode 100644 port/arduino/setup.mk
+
+diff --git a/apps/client_arduino.cpp b/apps/client_arduino.cpp
+new file mode 100644
+index 00000000..44b1690d
+--- /dev/null
++++ b/apps/client_arduino.cpp
+@@ -0,0 +1,318 @@
++#include "Ethernet2.h"
++#include "serial.h"
++#include "oc_api.h"
++#include "oc_clock.h"
++#include "oc_assert.h"
++#include "oc_storage.h"
++#include "oc_connectivity.h"
++#include "util/oc_process.h"
++#include "oc_network_events_mutex.h"
++
++#ifdef __AVR__
++#ifdef OC_XMEM
++void extRAMinit(void)__attribute__ ((used, naked, section (".init3")));
++void extRAMinit(void) {
++    // set up the xmem registers
++    XMCRB=0;
++    XMCRA=1<<SRE;
++    DDRD|=_BV(PD7);
++    DDRL|=(_BV(PL6)|_BV(PL7));
++}
++#endif
++#endif
++
++OC_PROCESS(sample_client_process, "client");
++static int
++app_init(void)
++{
++  int ret = oc_init_platform("Apple", NULL, NULL);
++  ret |= oc_add_device("/oic/d", "oic.d.phone", "Kishen's IPhone", "ocf.1.0.0",
++                       "ocf.res.1.0.0", NULL, NULL);
++  return ret;
++}
++
++#define MAX_URI_LENGTH (30)
++static char a_light[MAX_URI_LENGTH];
++static oc_endpoint_t *light_server;
++
++static bool state;
++static int power;
++static oc_string_t name;
++
++static oc_event_callback_retval_t
++stop_observe(void *data)
++{
++  (void)data;
++  OC_DBG("Stopping OBSERVE");
++  oc_stop_observe(a_light, light_server);
++  return OC_EVENT_DONE;
++}
++
++static void
++observe_light(oc_client_response_t *data)
++{
++  OC_DBG("OBSERVE_light:");
++  oc_rep_t *rep = data->payload;
++  while (rep != NULL) {
++    OC_DBG("key %s, value ", oc_string(rep->name));
++    switch (rep->type) {
++    case OC_REP_BOOL:
++      OC_DBG("%d", rep->value.boolean);
++      state = rep->value.boolean;
++      break;
++    case OC_REP_INT:
++      OC_DBG("%d", rep->value.integer);
++      power = rep->value.integer;
++      break;
++    case OC_REP_STRING:
++      OC_DBG("%s", oc_string(rep->value.string));
++      if (oc_string_len(name))
++        oc_free_string(&name);
++      oc_new_string(&name, oc_string(rep->value.string),
++                    oc_string_len(rep->value.string));
++      break;
++    default:
++      break;
++    }
++    rep = rep->next;
++  }
++}
++
++static void
++post2_light(oc_client_response_t *data)
++{
++  OC_DBG("POST2_light:");
++  if (data->code == OC_STATUS_CHANGED)
++    OC_DBG("POST response: CHANGED");
++  else if (data->code == OC_STATUS_CREATED)
++    OC_DBG("POST response: CREATED");
++  else
++    OC_DBG("POST response code %d", data->code);
++
++  oc_do_observe(a_light, light_server, NULL, &observe_light, LOW_QOS, NULL);
++  oc_set_delayed_callback(NULL, &stop_observe, 30);
++  OC_DBG("Sent OBSERVE request");
++}
++
++static void
++post_light(oc_client_response_t *data)
++{
++  OC_DBG("POST_light:");
++  if (data->code == OC_STATUS_CHANGED)
++    OC_DBG("POST response: CHANGED");
++  else if (data->code == OC_STATUS_CREATED)
++    OC_DBG("POST response: CREATED");
++  else
++    OC_DBG("POST response code %d", data->code);
++
++  if (oc_init_post(a_light, light_server, NULL, &post2_light, LOW_QOS, NULL)) {
++    oc_rep_start_root_object();
++    oc_rep_set_boolean(root, state, true);
++    oc_rep_set_int(root, power, 55);
++    oc_rep_end_root_object();
++    if (oc_do_post())
++      OC_DBG("Sent POST request");
++    else
++      OC_DBG("Could not send POST request");
++  } else
++    OC_DBG("Could not init POST request");
++}
++
++static void
++put_light(oc_client_response_t *data)
++{
++  OC_DBG("PUT_light:");
++
++  if (data->code == OC_STATUS_CHANGED)
++    OC_DBG("PUT response: CHANGED");
++  else
++    OC_DBG("PUT response code %d", data->code);
++
++  if (oc_init_post(a_light, light_server, NULL, &post_light, LOW_QOS, NULL)) {
++    oc_rep_start_root_object();
++    oc_rep_set_boolean(root, state, false);
++    oc_rep_set_int(root, power, 105);
++    oc_rep_end_root_object();
++    if (oc_do_post())
++      OC_DBG("Sent POST request");
++    else
++      OC_DBG("Could not send POST request");
++  } else
++    OC_DBG("Could not init POST request");
++}
++
++static void
++get_light(oc_client_response_t *data)
++{
++  OC_DBG("GET_light:");
++  oc_rep_t *rep = data->payload;
++  while (rep != NULL) {
++    OC_DBG("key %s, value ", oc_string(rep->name));
++    switch (rep->type) {
++    case OC_REP_BOOL:
++      OC_DBG("%d", rep->value.boolean);
++      state = rep->value.boolean;
++      break;
++    case OC_REP_INT:
++      OC_DBG("%d", rep->value.integer);
++      power = rep->value.integer;
++      break;
++    case OC_REP_STRING:
++      OC_DBG("%s", oc_string(rep->value.string));
++      if (oc_string_len(name))
++        oc_free_string(&name);
++      oc_new_string(&name, oc_string(rep->value.string),
++                    oc_string_len(rep->value.string));
++      break;
++    default:
++      break;
++    }
++    rep = rep->next;
++  }
++
++  if (oc_init_put(a_light, light_server, NULL, &put_light, LOW_QOS, NULL)) {
++    oc_rep_start_root_object();
++    oc_rep_set_boolean(root, state, true);
++    oc_rep_set_int(root, power, 15);
++    oc_rep_end_root_object();
++
++    if (oc_do_put())
++      OC_DBG("Sent PUT request");
++    else
++      OC_DBG("Could not send PUT request");
++  } else
++    OC_DBG("Could not init PUT request");
++}
++
++static oc_discovery_flags_t
++discovery(const char *anchor, const char *uri, oc_string_array_t types,
++          oc_interface_mask_t interfaces, oc_endpoint_t *endpoint,
++          oc_resource_properties_t bm, void *user_data)
++{
++  (void)anchor;
++  (void)user_data;
++  (void)interfaces;
++  (void)bm;
++  int i;
++  int uri_len = strlen(uri);
++  uri_len = (uri_len >= MAX_URI_LENGTH) ? MAX_URI_LENGTH - 1 : uri_len;
++  for (i = 0; i < (int)oc_string_array_get_allocated_size(types); i++) {
++    char *t = oc_string_array_get_item(types, i);
++    if (strlen(t) == 10 && strncmp(t, "core.light", 10) == 0) {
++#ifdef OC_IPV4
++#ifdef OC_ESP32 //  this is experimental
++      light_server = endpoint;
++#else
++      light_server = endpoint->next;
++#endif
++      OC_DBG("IPV4 Resource ");
++#else
++      light_server = endpoint;
++      OC_DBG("IPV6 Resource ");
++#endif
++      strncpy(a_light, uri, uri_len);
++      a_light[uri_len] = '\0';
++
++      OC_DBG("Resource %s hosted at endpoints:", a_light);
++      oc_endpoint_t *ep = endpoint;
++      while (ep != NULL) {
++        PRINTipaddr(*ep);
++        PRINT("\n");
++        ep = ep->next;
++      }
++      oc_do_get(a_light, light_server, NULL, &get_light, LOW_QOS, NULL);
++
++      return OC_STOP_DISCOVERY;
++    }
++  }
++  oc_free_server_endpoints(endpoint);
++  return OC_CONTINUE_DISCOVERY;
++}
++static void
++issue_requests(void)
++{
++  oc_do_ip_discovery("core.light", &discovery, NULL);
++}
++
++static void
++signal_event_loop(void)
++{
++  oc_process_post(&sample_client_process, OC_PROCESS_EVENT_TIMER, NULL);
++}
++
++OC_PROCESS_THREAD(sample_client_process, ev, data)
++{
++  (void)data;
++  static struct oc_etimer et;
++  static const oc_handler_t handler = {.init = app_init,
++                                       .signal_event_loop = signal_event_loop,
++                                       .requests_entry = issue_requests };
++  static oc_clock_time_t next_event;
++  oc_set_mtu_size(1024);
++  oc_set_max_app_data_size(1024);
++  OC_PROCESS_BEGIN();
++  OC_DBG("Initializing client for arduino");
++  while (ev != OC_PROCESS_EVENT_EXIT) {
++    oc_etimer_set(&et, (oc_clock_time_t)next_event);
++
++    if(ev == OC_PROCESS_EVENT_INIT){
++      int init = oc_main_init(&handler);
++      if (init < 0){
++        OC_DBG("Client Init failed!");
++        return init;
++      }
++      OC_DBG("Client process init!");
++    }
++    else if(ev == OC_PROCESS_EVENT_TIMER){
++      next_event = oc_main_poll();
++      next_event -= oc_clock_time();
++    }
++    OC_PROCESS_WAIT_EVENT();
++  }
++ OC_PROCESS_END();
++}
++
++// Arduino Ethernet Shield
++uint8_t ConnectToNetwork()
++{
++  // Note: ****Update the MAC address here with your shield's MAC address****
++  uint8_t ETHERNET_MAC[] = {0x90, 0xA2, 0xDA, 0x11, 0x44, 0xA9};
++  Ethernet.init(5); // CS Pin for MKRZERO
++  uint8_t error = Ethernet.begin(ETHERNET_MAC);
++  if (error  == 0)
++  {
++    OC_ERR("Error connecting to Network: %d", error);
++    return -1;
++  }
++  IPAddress ip = Ethernet.localIP();
++  OC_DBG("Connected to Ethernet IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
++  return 0;
++}
++
++void setup() {
++#if defined(__arm__) && defined(__SAMD21G18A__) || defined(__SAM3X8E__)
++	Serial.begin(250000);
++#else
++	Serial.begin(115200);
++#endif
++#if defined(__SAMD21G18A__)
++  while (!Serial) {
++  }
++#endif
++  if (ConnectToNetwork() != 0)
++  {
++    OC_ERR("Unable to connect to network");
++    return;
++  }
++  delay(500);
++#ifdef OC_SECURITY
++  oc_storage_config("creds");
++#endif /* OC_SECURITY */
++  oc_process_start(&sample_client_process, NULL);
++  delay(200);
++}
++
++void loop() {
++
++  oc_process_run();
++}
+diff --git a/apps/server_arduino.cpp b/apps/server_arduino.cpp
+new file mode 100644
+index 00000000..32a0989b
+--- /dev/null
++++ b/apps/server_arduino.cpp
+@@ -0,0 +1,204 @@
++#include "Ethernet2.h"
++#include "serial.h"
++#include "oc_api.h"
++#include "oc_clock.h"
++#include "oc_assert.h"
++#include "oc_storage.h"
++#include "oc_connectivity.h"
++#include "util/oc_process.h"
++#include "oc_network_events_mutex.h"
++
++#ifdef __AVR__
++#ifdef OC_XMEM
++void extRAMinit(void)__attribute__ ((used, naked, section (".init3")));
++void extRAMinit(void) {
++    // set up the xmem registers
++    XMCRB=0;
++    XMCRA=1<<SRE;
++    DDRD|=_BV(PD7);
++    DDRL|=(_BV(PL6)|_BV(PL7));
++}
++#endif
++#endif
++OC_PROCESS(sample_server_process, "server");
++static bool state = false;
++int power;
++oc_string_t name;
++
++static int
++app_init(void)
++{
++  int ret = oc_init_platform("Intel", NULL, NULL);
++  ret |= oc_add_device("/oic/d", "oic.d.light", "Lamp", "ocf.1.0.0",
++                       "ocf.res.1.0.0", NULL, NULL);
++  return ret;
++}
++
++static void
++get_light(oc_request_t *request, oc_interface_mask_t interface, void *user_data)
++{
++  (void)user_data;
++  ++power;
++
++  OC_DBG("GET_light:\n");
++  oc_rep_start_root_object();
++  switch (interface) {
++  case OC_IF_BASELINE:
++    oc_process_baseline_interface(request->resource);
++  /* fall through */
++  case OC_IF_RW:
++    oc_rep_set_boolean(root, state, state);
++    oc_rep_set_int(root, power, power);
++    oc_rep_set_text_string(root, name, oc_string(name));
++    break;
++  default:
++    break;
++  }
++  oc_rep_end_root_object();
++  oc_send_response(request, OC_STATUS_OK);
++}
++
++static void
++post_light(oc_request_t *request, oc_interface_mask_t interface, void *user_data)
++{
++  (void)interface;
++  (void)user_data;
++  OC_DBG("POST_light:\n");
++  oc_rep_t *rep = request->request_payload;
++  while (rep != NULL) {
++    OC_DBG(("key: %s "), oc_string(rep->name));
++    switch (rep->type) {
++    case OC_REP_BOOL:
++      state = rep->value.boolean;
++      OC_DBG("value: %d\n", state);
++      break;
++    case OC_REP_INT:
++      power = rep->value.integer;
++      OC_DBG("value: %d\n", power);
++      break;
++    case OC_REP_STRING:
++      oc_free_string(&name);
++      oc_new_string(&name, oc_string(rep->value.string),
++                    oc_string_len(rep->value.string));
++      break;
++    default:
++      oc_send_response(request, OC_STATUS_BAD_REQUEST);
++      return;
++      break;
++    }
++    rep = rep->next;
++  }
++  oc_send_response(request, OC_STATUS_CHANGED);
++}
++
++static void
++put_light(oc_request_t *request, oc_interface_mask_t interface,
++           void *user_data)
++{
++  (void)interface;
++  (void)user_data;
++  post_light(request, interface, user_data);
++}
++
++static void
++register_resources(void)
++{
++  oc_resource_t *res = oc_new_resource("Yann's Light", "/a/light", 2, 0);
++  oc_resource_bind_resource_type(res, "core.light");
++  oc_resource_bind_resource_type(res, "core.brightlight");
++  oc_resource_bind_resource_interface(res, OC_IF_RW);
++  oc_resource_set_default_interface(res, OC_IF_RW);
++  oc_resource_set_discoverable(res, true);
++  oc_resource_set_periodic_observable(res, 1);
++  oc_resource_set_request_handler(res, OC_GET, get_light, NULL);
++  oc_resource_set_request_handler(res, OC_PUT, put_light, NULL);
++  oc_resource_set_request_handler(res, OC_POST, post_light, NULL);
++  oc_add_resource(res);
++}
++
++static void
++signal_event_loop(void)
++{
++  oc_process_post(&sample_server_process, OC_PROCESS_EVENT_TIMER, NULL);
++}
++
++
++OC_PROCESS_THREAD(sample_server_process, ev, data)
++{
++  (void)data;
++  static struct oc_etimer et;
++  static const oc_handler_t handler = {.init = app_init,
++                                       .signal_event_loop = signal_event_loop,
++                                       .register_resources = register_resources };
++  static oc_clock_time_t next_event;
++  oc_set_mtu_size(512);
++  oc_set_max_app_data_size(880);
++
++  OC_PROCESS_BEGIN();
++
++  OC_DBG("Initializing server for arduino");
++
++  while (ev != OC_PROCESS_EVENT_EXIT) {
++ 	oc_etimer_set(&et, (oc_clock_time_t)next_event);
++
++	if(ev == OC_PROCESS_EVENT_INIT){
++		int init = oc_main_init(&handler);
++		if (init < 0){
++			OC_DBG("Server Init failed!");
++			return init;
++		}
++      	OC_DBG("Server process init!");
++	}
++	else if(ev == OC_PROCESS_EVENT_TIMER){
++		next_event = oc_main_poll();
++		next_event -= oc_clock_time();
++	}
++    OC_PROCESS_WAIT_EVENT();
++  }
++ OC_PROCESS_END();
++}
++// Arduino Ethernet Shield
++uint8_t ConnectToNetwork()
++{
++	// Note: ****Update the MAC address here with your shield's MAC address****
++	uint8_t ETHERNET_MAC[] = {0x92, 0xA1, 0xDA, 0x11, 0x44, 0xA9};
++#if defined(__SAMD21G18A__)
++  Ethernet.init(5); // CS Pin for MKRZERO
++#endif
++	uint8_t error = Ethernet.begin(ETHERNET_MAC);
++	if (error  == 0)
++	{
++		OC_ERR("Error connecting to Network: %d", error);
++		return -1;
++	}
++  IPAddress ip = Ethernet.localIP();
++  OC_DBG("Connected to Ethernet IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
++	return 0;
++}
++
++void setup() {
++#if defined(__arm__) && defined(__SAMD21G18A__) || defined(__SAM3X8E__)
++	Serial.begin(250000);
++#else
++	Serial.begin(115200);
++#endif
++#if defined(__SAMD21G18A__)
++  while (!Serial) {
++  }
++#endif
++	if (ConnectToNetwork() != 0)
++	{
++		OC_ERR("Unable to connect to network");
++		return;
++	}
++
++#ifdef OC_SECURITY
++  oc_storage_config("creds");
++#endif /* OC_SECURITY */
++	oc_process_start(&sample_server_process, NULL);
++  	delay(200);
++}
++
++void loop() {
++	oc_process_run();
++}
+diff --git a/port/arduino/Makefile b/port/arduino/Makefile
+new file mode 100644
+index 00000000..db386c40
+--- /dev/null
++++ b/port/arduino/Makefile
+@@ -0,0 +1,124 @@
++include setup.mk
++
++ROOT_DIR =../..
++
++ifneq ($(ARCH),avr)
++ifneq ($(ARCH),samd)
++ifneq ($(ARCH),sam)
++$(error Target Architecture must be define to proceed!)
++endif
++endif
++endif
++
++ifeq ($(APP),server)
++  LOCAL_CPP_SRCS 	+= server_arduino.cpp
++  CXXFLAGS 	+= -DOC_SERVER
++  TARGET = $(ARCH)_server
++ifeq ($(XMEM),1)
++  CXXFLAGS 		    += -DOC_XMEM
++endif
++else ifeq ($(APP),client)
++  CXXFLAGS 	+= -DOC_CLIENT
++ifeq ($(XMEM),1)
++  CXXFLAGS 	+= -DOC_XMEM
++endif
++  LOCAL_CPP_SRCS 	+= client_arduino.cpp
++  TARGET = $ARCH_client
++else
++$(error Must define an app server/client to proceed!)
++endif
++
++ifeq ($(DYNAMIC),1)
++	CXXFLAGS += -DOC_DYNAMIC_ALLOCATION
++endif
++
++ifeq ($(XMEM),1)
++	CXXFLAGS += -DOC_XMEM
++endif
++
++ifeq ($(IPV4),1)
++	CXXFLAGS += -DOC_IPV4
++endif
++
++
++### Iotivity contrained includes
++ifeq ($(ARCH),avr)
++	DEPS_HEADERS +=$(addprefix -Ideps/, pRNG wiz5500 serial sdFat)
++else
++	DEPS_HEADERS +=$(addprefix -Ideps/, wiz5500 serial sdFat)
++endif
++CORE_HEADERS +=$(addprefix -I$(ROOT_DIR)/, . messaging/coap util util/pt include  api port security deps/mbedtls/include/mbedtls)
++LIB_HEADERS  +=-I$(ARDUINO_DIR)/libraries/SdFat/src/FatLib
++CXXFLAGS += $(DEPS_HEADERS) $(CORE_HEADERS) $(LIB_HEADERS) -Iadapter -Iapps/include
++
++ifeq ($(SECURE),1)
++	CXXFLAGS	+=$(addprefix -I$(ROOT_DIR)/deps/mbedtls/, include include/mbedtls)
++	CXXFLAGS	+= -DOC_SECURITY
++endif
++
++SERVER_ARCHIVE 	= build-$(BOARD_TAG)/libarduino-adapter.a
++TIME_ARCHIVE 	= build-$(BOARD_TAG)/libarduino-time.a
++WIZ5500_ARCHIVE = build-$(BOARD_TAG)/libarduino-wiz5500.a
++SERIAL_ARCHIVE 	= build-$(BOARD_TAG)/libarduino-serial.a
++SDFAT_ARCHIVE 	= build-$(BOARD_TAG)/libarduino-sdfat.a
++
++DEPS_OBJ += $(TIME_ARCHIVE) $(WIZ5500_ARCHIVE) $(SDFAT_ARCHIVE) $(SERIAL_ARCHIVE)
++
++ifeq ($(ARCH),avr)
++	PRNG_ARCHIVE 	= build-$(BOARD_TAG)/libarduino-prng.a
++endif
++DEPS_OBJ += $(PRNG_ARCHIVE)
++
++SERVER_OBJ     = adapter/build-$(BOARD_TAG)/libarduino-adapter.a
++OTHER_OBJS    += $(SERVER_OBJ)
++
++ifeq ($(ARCH),avr)
++OTHER_OBJS 		+= deps/pRNG/$(PRNG_ARCHIVE)
++endif
++OTHER_OBJS 		+= deps/Time/$(TIME_ARCHIVE)
++OTHER_OBJS 		+= deps/wiz5500/$(WIZ5500_ARCHIVE)
++OTHER_OBJS 		+= deps/serial/$(SERIAL_ARCHIVE)
++OTHER_OBJS 		+= deps/sdFat/$(SDFAT_ARCHIVE)
++
++VPATH=apps/server:$(ROOT_DIR)/apps:
++
++ifeq ($(ARCH),avr)
++	include avr.mk
++
++else ifeq ($(ARCH),sam)
++	include sam.mk
++
++else ifeq ($(ARCH),samd)
++	include samd.mk
++else
++$(error Target Architecture must be define to proceed!)
++endif
++
++
++$(SERVER_OBJ): $(DEPS_OBJ)
++	$(MAKE) -C adapter $(SERVER_ARCHIVE)
++
++$(PRNG_ARCHIVE):
++	$(MAKE) -C deps/pRNG $@
++
++$(TIME_ARCHIVE):
++	$(MAKE) -C deps/Time  $@
++
++$(WIZ5500_ARCHIVE):
++	$(MAKE) -C deps/wiz5500 $@
++
++$(SERIAL_ARCHIVE) :
++	$(MAKE) -C deps/serial $@
++
++$(SDFAT_ARCHIVE):
++	$(MAKE) -C deps/sdFat $@
++
++clean::
++	$(MAKE) -C adapter clean
++ifeq ($(ARCH),avr)
++	$(MAKE) -C deps/pRNG clean
++endif
++	$(MAKE) -C deps/Time clean
++	$(MAKE) -C deps/wiz5500 clean
++	$(MAKE) -C deps/serial clean
++	$(MAKE) -C deps/sdFat clean
+\ No newline at end of file
+diff --git a/port/arduino/README.md b/port/arduino/README.md
+new file mode 100644
+index 00000000..e7fce581
+--- /dev/null
++++ b/port/arduino/README.md
+@@ -0,0 +1,174 @@
++Porting iotivity constrained to arduino 
++----------------------------------------
++
++The port target the arduino AVR(Mega2560)and ARM architectures, mostly arduino SAMD(arduino MKRZERO,
++though andy SAMD board should work) as well as the arduino Due. Though most feature should be supported
++on SAMD boards, use the arduino Due  for more stable deployment of secuirty features. The ipadapter 
++for network requirement is based around the Wiznet w5500 shield,  dependant arduino C++ libraries 
++were adapted by providing C wrappers. an SD card is used to provide pesistant storage for security
++build.this is made available via the C adapter libarduino-sdfat
++
++Preparing Arduino Cores and Tools 
++----------------------------------
++I updated socket.cpp based on the mainline iotivity_1_2(arduino adapter) comment regarding the
++fix required on the socket.cpp code for the udp receive method the patch is arduino_socket.patch.
++apply this patch to your socket.cpp file.
++
++The iotivity constrained logging system is not directly compatible with arduino at it is. More,
++it needs to handle different architecture. a library is provided for this as libarduino-serial.
++Still one need to patch the oc_log.h to declare the the different logging methods. 
++
++The arduino Time library target C++ code, though adding attribute like extern C or _cplusplus,
++it uses method overloading that is not acceptable from C perspective. i provide a basic tweak
++to make it usable. one can write a C++ class around it a provide a cleaner C wrapper 
++or just make it plain C. 
++
++### Build tools
++
++- Arduino Makefile(https://github.com/sudar/Arduino-Makefile) Used to compile and
++	upload the hex file to the arduino board. this is will be downloaded and patched,
++	accordingly to adapt for the iotivity constained stack compilation.
++
++- Arduino sdk (https://github.com/arduino/ArduinoCore-avr.git) , one can just provide a path to 
++	the local arduino IDE, maybe sparse check the corresponding development file from arduino github
++	Note: this must be install manually.
++   
++- Arduino libraries
++
++  -Time library (https://github.com/PaulStoffregen/Time) (oc_clock.c method)
++
++  - Ethernet2 library(https://github.com/adafruit/Ethernet2) (ipadapter.c methods)
++
++  - pseudo random number generator(https://github.com/leomil72/pRNG) (oc_random.c method)
++	Note: For the ARM ARCH, the Due , we make use on the internal random module(TRNG), although 
++		for the SAMD, one can provide n efficient PRNG for those, at the moment we making use of the 
++		utility from the SAMD core stdlib.
++
++  - Arduino FAT16/FAT32 Library (https://github.com/greiman/SdFat.git) (oc_storage.c method)
++
++
++
++Note: Arduino sdk depends on the building platform thus one will need to define the path to 
++	arduino-home(arduino core, libraries... path) in the setup.mk manually. For ARM board(SAM/SAMD),
++	intall toolchain and cores via the Arduino IDE(see picture): arm_tools_cores.PNG
++   
++Build process: linux 
++---------------------
++#### Get the development sources
++
++`git clone --recurse-submodules https://github.com/yannS2016/iotivity-constrained-arduino`
++
++#### Applying patch
++
++all patch files are under iotivity-constrained-arduino/patches
++```
++ cd iotivity-constrained-arduino/adapter/iotivity-constrained 
++ patch -p0 < ../../patches/iotivity_constrained.patch
++ cd $ARDUINO_DIR
++ patch -p0 < ~/iotivity-constrained-arduino/patches/arduino_socket.patch
++ patch -p0 < ~/iotivity-constrained-arduino/patches/arduino_time.patch
++```
++ 
++Note: the patch above need not to be applied manually, the build build script handle that 
++	automatically. However,it many some tweak  to handle that more efficiently
++
++
++### Unsecure build
++```
++#### For AVR target
++make ARCH=avr SERVER=1 IPV4=1 DYNAMIC=1 XMEM=1 upload
++#### Using an External SRAM: 
++Consult the avr.mk to select the memory configuration that suite your needs
++make SERVER=1 IPV4=1  DYNAMIC=1 XMEM=1 upload
++```
++```
++#### For ARM(SAM or DUE) target
++make ARCH=sam SERVER=1 IPV4=1 DYNAMIC=1 XMEM=1 upload
++```
++```
++#### For ARM(SAMD) target
++make ARCH=samd SERVER=1 IPV4=1 DYNAMIC=1 XMEM=1 upload
++```
++### Secure build
++```
++#### For AVR target
++make ARCH=avr SERVER=1 IPV4=1 DYNAMIC=1 XMEM=1 SECURE=1 upload
++#### Using an External SRAM: 
++Consult the setup.mk to select the memory configuration that suite your needs
++make ARCH=avr SERVER=1 IPV4=1  DYNAMIC=1 XMEM=1 SECURE=1 upload
++```
++```
++#### For ARM(SAM/DUE) target
++make ARCH=sam SERVER=1 IPV4=1 DYNAMIC=1 XMEM=1 SECURE=1 upload
++```
++```
++#### For ARM(SAMD) target
++make ARCH=samd SERVER=1 IPV4=1 DYNAMIC=1 XMEM=1 SECURE=1 upload 
++```
++
++Note: as of lately, the build is doen within the build scritp( build_arduino.sh)
++	the user needs just to provide build options.
++
++Security
++--------
++Security Support as been added for all boards. successful tests were performed on ARM based devices
++with better result obtain on the Arduino Due.
++
++Note:: on SAMD board make sure to disable DEBUG as much as possible.
++
++Testing
++-------
++Under test  see some log of what to expect from the arduino server when running the simpleclient
++app from linux. An arduino client test is also provided under this path for operating as a resources
++requester. Additional tests show that one iotivity-constrained client/server can communicate with 
++another client/server based on the main iotivity.some test were perfomed using the  iotivity node JS
++port(iotivity-node) as well yieldng expected results, i was even able to get good response from the
++iot-rest-api server. more on that will be documented. 
++
++Using an extrnal memory for ( Mega) would become a requirment as the iotivity stack keep growing
++with additional feature. still it improves the performance of the board(Mega) and enable testing
++with Debug fully on, allocated larger space for internal structure. first test were done successfully
++pushing all heap allocation to external memory. For security feature one may need to push .data
++section as well heap to the xmem interface. 
++
++Boards
++-------
++These Boards have been tested:
++Arduino Mega (atmega2560)
++Arduino MKRZERO(ARM , SAMD), all SAMD baords that can support Wiznet 5500 should work
++Arduino DUE( ARM, SAM)
++Note: WIFI shield are not yet supported
++
++Issues
++------
++Arduino does not handle IPV6, thus client wont be able to send unicast requests/responses 
++automatically. from what i got, the client actually sent two request, one over IPV6(default)
++and another via IPV4 to the server which  receive both and reject the latter, although the response
++from the server contains all endpoints enabled(IPV6 and IPV4). By default the iotivity client code
++uses the first endpoint which is the IPV6 one. thus making arduino client unicast response
++unreachable(w5500 does not support IPV6). one should use the next endpoint from the reply(which IPV4)
++as `light_server = endpoint->next;`
++
++
++mbeDTLS Memory constaints
++--------------------------
++```
++AVR Memory Usage
++----------------
++Device: atmega2560
++Program:  249194 bytes (95.1% Full)
++(.text + .data + .bootloader)
++Data:      19452 bytes (237.5% Full)
++(.data + .bss + .noinit)
++
++```
++```
++arm-none-eabi-size -B build-arduino_due_x/iotivity-constrained-arduino.elf
++   text    data     bss     dec     hex filename
++ 186436       0    4912  191348   2eb74 build-arduino_due_x/iotivity-constrained-arduino.elf
++```
++```
++arm-none-eabi-size -B build-arduino_due_x/iotivity-constrained-arduino.elf
++   text    data     bss     dec     hex filename
++ 167596    3744    4448  175788   2aeac build-mkrzero/iotivity-constrained-arduino.elf
++```
+diff --git a/port/arduino/adapter/Makefile b/port/arduino/adapter/Makefile
+new file mode 100644
+index 00000000..99c9c9f6
+--- /dev/null
++++ b/port/arduino/adapter/Makefile
+@@ -0,0 +1,107 @@
++include ../setup.mk
++
++ROOT_DIR =../../..
++MBEDTLS_DIR := $(ROOT_DIR)/deps/mbedtls
++
++DTLS += aes.c  aesni.c 	arc4.c  asn1parse.c	asn1write.c	base64.c  bignum.c blowfish.c\
++	camellia.c	ccm.c  cipher.c	cipher_wrap.c	 cmac.c  ctr_drbg.c	des.c  \
++	dhm.c  ecdh.c  ecdsa.c	ecjpake.c	ecp.c  ecp_curves.c	entropy.c	entropy_poll.c	error.c		\
++	gcm.c  havege.c	hmac_drbg.c	md.c  md2.c	 md4.c	md5.c  md_wrap.c  oid.c	 padlock.c	pem.c\
++	pk.c	pk_wrap.c	pkcs12.c	pkcs5.c		pkparse.c	 pkwrite.c	platform.c	ripemd160.c	rsa.c\
++	sha1.c	sha256.c	sha512.c	threading.c	timing.c	version.c	version_features.c		\
++	xtea.c  pkcs11.c 	x509.c 	x509_crt.c	debug.c	 net_sockets.c  ssl_cache.c	ssl_ciphersuites.c \
++	ssl_cli.c	ssl_cookie.c	 ssl_srv.c	ssl_ticket.c	ssl_tls.c	rsa_internal.c	x509write_csr.c\
++	x509write_crt.c	x509_create.c
++
++DTLSFLAGS=$(addprefix -I$(ROOT_DIR)/, security deps/mbedtls/include) -D__OC_RANDOM
++
++CBOR+=$(addprefix $(ROOT_DIR)/deps/tinycbor/src/, cborencoder.c cborencoder_close_container_checked.c cborparser.c)
++
++SRC_COMMON=$(wildcard  $(ROOT_DIR)/util/*.c) $(CBOR)
++SRC=$(wildcard $(ROOT_DIR)/messaging/coap/*.c $(ROOT_DIR)/api/*.c *.c )
++
++# Arduino ethernet and iotivity constrained includes
++
++LIB_HEADERS   =-I$(ARDUINO_DIR)/libraries/Ethernet2/src/utility -I$(ARDUINO_DIR)/libraries/SdFat/src/FatLib
++DEPS_HEADERS  =$(addprefix -I../deps/, pRNG  wiz5500 sdFat serial)
++CORE_HEADERS  =$(addprefix -I$(ROOT_DIR)/, messaging/coap util util/pt include  api port .)
++CFLAGS += -I. $(CORE_HEADERS) $(LIB_HEADERS) $(DEPS_HEADERS)
++
++ifeq ($(VERBOSE),1)
++	CFLAGS += -DOC_DEBUG -DOC_LOG_L1
++else ifeq ($(VERBOSE),2)
++	CFLAGS += -DOC_DEBUG  -DOC_LOG_L2
++endif
++
++ifeq ($(DYNAMIC),1)
++	CFLAGS += -DOC_DYNAMIC_ALLOCATION
++endif
++
++ifeq ($(SECURE),1)
++	SEC_SRC += $(addprefix $(ROOT_DIR)/security/, oc_acl.c oc_cred.c oc_doxm.c oc_pstat.c \
++	              oc_tls.c oc_svr.c oc_store.c oc_pki.c oc_certs.c oc_sp.c oc_keypair.c oc_csr.c oc_roles.c)
++	SRC += $(SEC_SRC)
++	SRC_COMMON += $(addprefix $(MBEDTLS_DIR)/library/,${DTLS})
++	MBEDTLS_PATCH_FILE := $(MBEDTLS_DIR)/patched.txt
++ifneq ($(DYNAMIC),1)
++	SRC_COMMON +=$(MBEDTLS_DIR)/library/memory_buffer_alloc.c
++endif
++	CFLAGS += ${DTLSFLAGS} -DOC_SECURITY
++endif
++
++ifeq ($(IPV4),1)
++	CFLAGS += -DOC_IPV4
++endif
++
++ifeq ($(COLLECTIONS),1)
++	CFLAGS += -DOC_COLLECTIONS
++endif
++
++ifeq ($(APP),server)
++	CFLAGS 	+= -DOC_SERVER
++endif
++
++ifeq ($(APP),client)
++	CFLAGS 	+= -DOC_CLIENT
++endif
++
++LOCAL_C_SRCS += $(SRC_COMMON)
++LOCAL_C_SRCS += $(SRC)
++
++${SRC} ${SRC_COMMON}: $(MBEDTLS_PATCH_FILE)
++
++VPATH=$(ROOT_DIR)/messaging/coap/:$(ROOT_DIR)/util/:$(ROOT_DIR)/api/:$(ROOT_DIR)/deps/tinycbor/src/:$(MBEDTLS_DIR)/library:$(ROOT_DIR)/security:
++
++ifeq ($(ARCH),avr)
++	include ../avr.mk
++
++else ifeq ($(ARCH),sam)
++	include ../sam.mk
++
++else ifeq ($(ARCH),samd)
++	include ../samd.mk
++
++else
++$(error Target Architecture must be define to proceed!)
++endif
++
++build-$(BOARD_TAG)/libarduino-adapter.a: $(LOCAL_OBJS)
++	$(AR) rcs $@ $(LOCAL_OBJS)
++
++ifneq ($(SECURE),0)
++MBEDTLS_PATCHES = $(sort $(wildcard ../../../patches/*.patch))
++MBEDTLS_ARDUINO_PATCH=../patches/mbedtls_arduino.patch
++$(MBEDTLS_PATCH_FILE):$(MBEDTLS_PATCHES) $(MBEDTLS_ARDUINO_PATCH)
++	if [ -d ${MBEDTLS_DIR} ]; then \
++	cd ${MBEDTLS_DIR} && \
++	git clean -fdx  && \
++	git reset --hard && \
++	cd -; \
++	fi && \
++	git submodule update --init && \
++	cd ${MBEDTLS_DIR} && \
++	for patch in $(MBEDTLS_PATCHES); do patch -r - -s -N -p1 < `echo $${patch} | sed 's/..\///'`; done && \
++	patch -r - -s -N -p1 < `echo $(MBEDTLS_ARDUINO_PATCH) | sed 's/..\/\(.*\)/..\/..\/port\/arduino\/\1/'` && \
++	echo "Patches applied in $^" > ${@F}
++endif
++
+diff --git a/port/arduino/adapter/abort.c b/port/arduino/adapter/abort.c
+new file mode 100644
+index 00000000..dd02a00b
+--- /dev/null
++++ b/port/arduino/adapter/abort.c
+@@ -0,0 +1,32 @@
++/******************************************************************
++*
++* Copyright 2018 iThemba LABS All Rights Reserved.
++*
++* Licensed under the Apache License, Version 2.0 (the "License");
++* you may not use this file except in compliance with the License.
++* You may obtain a copy of the License at
++
++*    http://www.apache.org/licenses/LICENSE-2.0
++
++* Unless required by applicable law or agreed to in writing, software
++* distributed under the License is distributed on an "AS IS" BASIS,
++* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++* See the License for the specific language governing permissions and
++* limitations under the License.
++*
++******************************************************************/
++
++#include "port/oc_assert.h"
++#include <stdlib.h>
++#include <assert.h>
++void
++abort_impl(void)
++{
++  abort();
++}
++
++void
++exit_impl(int status)
++{
++  exit(status);
++}
+diff --git a/port/arduino/adapter/ethadapter_utils.c b/port/arduino/adapter/ethadapter_utils.c
+new file mode 100644
+index 00000000..7a96d80d
+--- /dev/null
++++ b/port/arduino/adapter/ethadapter_utils.c
+@@ -0,0 +1,274 @@
++/******************************************************************
++*
++* Copyright 2018 iThemba LABS All Rights Reserved.
++*
++* Licensed under the Apache License, Version 2.0 (the "License");
++* you may not use this file except in compliance with the License.
++* You may obtain a copy of the License at
++
++*    http://www.apache.org/licenses/LICENSE-2.0
++
++* Unless required by applicable law or agreed to in writing, software
++* distributed under the License is distributed on an "AS IS" BASIS,
++* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++* See the License for the specific language governing permissions and
++* limitations under the License.
++*
++******************************************************************/
++#include <ctype.h>
++#include "oc_config.h"
++#include "port/oc_log.h"
++#include "port/oc_assert.h"
++#include "port/oc_connectivity.h"
++#include "port/oc_log.h"
++#include "Wiz5500.h"
++#include "ethadapter_utils.h"
++
++
++OCResult_t arduino_get_free_socket(uint8_t *sockID){
++
++	uint8_t state;
++	if(!wiznet5500) {
++		wiznet5500 = wiz5500_create();
++		if(!wiznet5500)
++			return STATUS_FAILED;
++	}
++	*sockID = 0;
++	for (uint8_t i = 1; i < MAX_SOCK_NUM; i++)
++	{
++		state = wiz5500_readSnSR(wiznet5500, &i) ;
++		if (state == SnSR_CLOSED || state == SnSR_FIN_WAIT)
++		{
++			*sockID = i;
++			break;
++		}
++	}
++	if (*sockID == 0)
++	{
++		OC_ERR("No socket sockID 0");
++		return SOCKET_OPERATION_FAILED;
++	}
++	return STATUS_OK;
++}
++
++OCResult_t arduino_init_udp_socket(uint16_t *local_port, uint8_t *socketID){
++
++	if(!socketID) {
++		OC_ERR("Socket ID not provided!");
++		return SOCKET_OPERATION_FAILED;
++	}
++	/*Get an availlable socket(closing or closed)*/
++	OCResult_t ret = arduino_get_free_socket(socketID);
++	if (ret != STATUS_OK)
++	{
++		OC_ERR("Get sock failed!");
++		return ret;
++	}
++	//Create a datagram socket on which to recv/send.
++	if (!socket(*socketID, SnMR_UDP, *local_port, 0))
++	{
++		OC_ERR("socket create failed!");
++		return STATUS_FAILED;
++	}
++	return STATUS_OK;
++}
++OCResult_t
++arduino_init_mcast_udp_socket(const char *mcast_addr, uint16_t *mcast_port,
++									uint16_t *local_port, uint8_t *socketID)
++{
++
++	if(!socketID || !mcast_addr) {
++		OC_ERR("Socket ID or mcast addr null!");
++		return SOCKET_OPERATION_FAILED;
++	}
++	uint8_t mcast_mac_addr[] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0x00};
++	uint8_t ip_addr[4] = { 0 };
++	uint16_t parsed_port = 0;
++	if (arduino_parse_IPv4_addr(mcast_addr, ip_addr, sizeof(ip_addr), &parsed_port) != STATUS_OK)
++	{
++		OC_ERR("mcast ip parse fail!");
++		return STATUS_FAILED;
++	}
++	*socketID = 0;
++	OCResult_t ret = arduino_get_free_socket(socketID);
++	if (ret != STATUS_OK)
++	{
++		OC_ERR("Get sock fail!");
++		return ret;
++	}
++	//Calculate Multicast MAC address
++	mcast_mac_addr[3] = ip_addr[1] & 0x7F;
++	mcast_mac_addr[4] = ip_addr[2];
++	mcast_mac_addr[5] = ip_addr[3];
++	wiz5500_writeSnDIPR(wiznet5500, socketID, (uint8_t *)ip_addr);
++	wiz5500_writeSnDHAR(wiznet5500, socketID, (uint8_t *)mcast_mac_addr);
++	wiz5500_writeSnDPORT(wiznet5500, socketID, mcast_port);
++	if (!socket(*socketID, SnMR_UDP, *local_port, SnMR_MULTI))
++	{
++		OC_ERR("sock create fail!");
++		return SOCKET_OPERATION_FAILED;
++	}
++	return STATUS_OK;
++}
++/// Retrieves the IP address assigned to Arduino Ethernet shield
++OCResult_t oc_ard_get_iface_addr(uint8_t *address)
++{
++	//TODO : Fix this for scenarios when this API is invoked when device is not connected
++	if(!wiznet5500) {
++		wiznet5500 = wiz5500_create();
++		if(!wiznet5500)
++			return STATUS_FAILED;
++	}
++	wiz5500_getIPAddress(wiznet5500, (uint8_t *)address);
++	return STATUS_OK;
++}
++
++OCResult_t arduino_parse_IPv4_addr(const char *ip_addrStr, uint8_t *ip_addr,
++                                      uint8_t ip_addrLen, uint16_t *port)
++{
++	if (!ip_addr || !isdigit(ip_addrStr[0]) || !port)
++	{
++		OC_ERR("invalid param!");
++		return STATUS_INVALID_PARAM;
++	}
++	uint8_t index = 0;
++	uint8_t dotCount = 0;
++	ip_addr[index] = 0;
++	*port = 0;
++	while (*ip_addrStr)
++	{
++		if (isdigit(*ip_addrStr))
++		{
++			if(index >= ip_addrLen)
++			{
++				OC_ERR(("invalid mcast addr!"));
++				return STATUS_INVALID_PARAM;
++			}
++			ip_addr[index] *= 10; //20+2=22 --> 220+7
++			ip_addr[index] += *ip_addrStr - '0';
++		}
++		else if (*ip_addrStr == '.')
++		{
++			index++;
++			dotCount++;
++			ip_addr[index] = 0;
++		}
++		else
++		{
++			break;
++		}
++		ip_addrStr++;
++	}
++  // incase user supply ip:port fetch the port number as below
++	if (*ip_addrStr == ':')
++	{
++		ip_addrStr++;
++		while (*ip_addrStr)
++		{
++			if (isdigit(*ip_addrStr))
++			{
++				*port *= 10;
++				*port += *ip_addrStr - '0';
++			}
++			else
++			{
++				break;
++			}
++			ip_addrStr++;
++		}
++	}
++	if (dotCount == 3)
++	{
++		return STATUS_OK;
++	}
++	return STATUS_FAILED;
++}
++/**
++ * Flag to check if multicast server is started
++ */
++bool arduino_mcast_serv_started = false;
++
++uint8_t start_udp_server(uint16_t *local_port)
++{
++	if(!local_port) {
++	  OC_DBG("server port null!");
++		return STATUS_FAILED;
++	}
++	uint8_t raw_ip_addr[4];
++	if(!wiznet5500) {
++		wiznet5500 = wiz5500_create();
++		if(!wiznet5500)
++			return STATUS_FAILED;
++	}
++	wiz5500_getIPAddress(wiznet5500, raw_ip_addr);
++	uint8_t serverFD = 1; // try this socket
++	if (arduino_init_udp_socket(local_port, &serverFD) != STATUS_OK)
++	{
++		return STATUS_FAILED;
++	}
++	return serverFD;
++}
++uint8_t start_udp_mcast_server(const char *mcast_addr,
++                              uint16_t *mcast_port,
++                              uint16_t *local_port)
++{
++	if (arduino_mcast_serv_started == true)
++	{
++	  return SERVER_STARTED_ALREADY;
++	}
++	uint8_t serverFD = 1;
++	if (arduino_init_mcast_udp_socket(mcast_addr, mcast_port, local_port, &serverFD)!= STATUS_OK)
++		return STATUS_FAILED;
++  return serverFD;
++}
++
++/*Utility method to monitor ready socket*/
++static uint16_t socket_ready(uint8_t *socketID){
++
++  if(!wiznet5500) {
++    wiznet5500 = wiz5500_create();
++    if(!wiznet5500)
++      return STATUS_FAILED;
++  }
++  uint16_t recvLen = wiz5500_getRXReceivedSize(wiznet5500, socketID);
++  if(recvLen == 0) {
++    return 0;
++  } else {
++    return recvLen;
++  }
++}
++
++uint8_t select(uint8_t nsds, sdset_t *setsds){
++  uint8_t n = 0;
++  for(int i = 1; i < nsds; i++){
++      uint16_t ret = socket_ready(&setsds->sds[i]);
++      // Good: data has been receive on this socket: clear it and increase socket ready count
++      if(ret != 0) {
++		SD_CLR(setsds->sds[i], setsds);
++        n++;
++		setsds->rcv_size = ret;
++      }
++  }
++  return n;
++}
++
++int16_t recv_msg(uint8_t *socketID, uint8_t *sender_addr, uint16_t *sender_port,
++                 uint8_t *data, uint16_t packets_size)
++{
++  packets_size = packets_size > OC_MAX_APP_DATA_SIZE ? OC_MAX_APP_DATA_SIZE : packets_size;
++  return recvfrom(*socketID, (uint8_t *)data, packets_size + 1, sender_addr, sender_port);
++}
++
++OCResult_t ard_send_data(uint8_t socketID, uint8_t *dest_addr,
++                          uint16_t *dest_port, uint8_t *data,
++                          const uint16_t len)
++{
++	uint8_t _socketID = socketID; // default client socket
++	uint32_t ret = sendto(_socketID, data, len, dest_addr, *dest_port);
++	if (ret <= 0){
++		OC_ERR("SendData failed: %u", ret);
++	}
++	return STATUS_OK;
++}
++
++
+diff --git a/port/arduino/adapter/ethadapter_utils.h b/port/arduino/adapter/ethadapter_utils.h
+new file mode 100644
+index 00000000..bacdb058
+--- /dev/null
++++ b/port/arduino/adapter/ethadapter_utils.h
+@@ -0,0 +1,119 @@
++/******************************************************************
++*
++* Copyright 2018 iThemba LABS All Rights Reserved.
++*
++* Licensed under the Apache License, Version 2.0 (the "License");
++* you may not use this file except in compliance with the License.
++* You may obtain a copy of the License at
++
++*    http://www.apache.org/licenses/LICENSE-2.0
++
++* Unless required by applicable law or agreed to in writing, software
++* distributed under the License is distributed on an "AS IS" BASIS,
++* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++* See the License for the specific language governing permissions and
++* limitations under the License.
++*
++******************************************************************/
++/**
++ * @file
++ * This file provides APIs ethernet client/server/network monitor modules.
++ */
++
++#ifndef ETH_ADAPTER_UTILS_
++#define ETH_ADAPTER_UTILS_
++
++#include <stdint.h>
++#include <socket.h>
++
++#ifdef __cplusplus
++extern "C"
++{
++#endif
++typedef enum
++{
++	/** Success status code - START HERE.*/
++	STATUS_OK = 0,
++	STATUS_FAILED = -1,
++	SOCKET_OPERATION_FAILED = -2,
++	STATUS_INVALID_PARAM = 1,
++	SERVER_STARTED_ALREADY = 2,
++} OCResult_t;
++
++typedef struct  sdset_t {
++  uint8_t sdsset;
++  uint8_t sds[MAX_SOCK_NUM];
++  uint8_t ready_sds;
++  uint16_t rcv_size;
++} sdset_t;
++
++#define SETSIZE (8)
++#define SD_ZERO(_setsds) (((sdset_t*)_setsds)->sdsset = 0 )
++#define SD_SET(sd,_setsds)                                  \
++do {                                                        \
++	((sdset_t*)_setsds)->sds[sd] = sd;                      \
++	((sdset_t*)_setsds)->sdsset |= (1 << (sd % SETSIZE));	\
++} while(0)
++#define SD_CLR(sd, _setsds)   (((sdset_t*)_setsds)->sdsset &= ~(1 << (sd % SETSIZE)))
++#define SD_ISSET(sd, _setsds) (((sdset_t*)_setsds)->sdsset & (1 << (sd % SETSIZE)))
++
++uint8_t select(uint8_t nsds, sdset_t *setsds);
++int16_t recv_msg(uint8_t *socketID, uint8_t *sender_addr,
++				uint16_t *sender_port, uint8_t *data, uint16_t packets_size);
++
++uint8_t start_udp_server(uint16_t *local_port);
++
++uint8_t start_udp_mcast_server(const char *mcast_addr, uint16_t *mcast_port, uint16_t *local_port);
++
++/**
++ * Get available UDP socket.
++ * @param[out]   sockID         Available UDP socket ID.
++ * @return  ::OC_STATUS_OK or Appropriate error code.
++ */
++extern OCResult_t arduino_get_free_socket(uint8_t *sockID);
++
++/**
++ * Initialize Unicast UDP socket.
++ * @param[in/out]   port        Port to start the unicast server.
++ * @param[out]      socketID    Unicast socket ID.
++ * @return  ::OC_STATUS_OK or Appropriate error code.
++ */
++extern OCResult_t arduino_init_udp_socket(uint16_t *local_port, uint8_t *socketID);
++
++/**
++ * Initialize Multicast UDP socket.
++ * @param[in]   mcastAddress     Port to start the unicast server.
++ * @param[in]   mport            Multicast port.
++ * @param[in]   lport            Local port on which the server is started.
++ * @param[out]  socketID         Multicast socket ID.
++ * @return  ::OC_STATUS_OK or Appropriate error code.
++ */
++
++extern OCResult_t arduino_init_mcast_udp_socket(const char *mcast_addr, uint16_t *mcast_port,
++												     uint16_t *local_port, uint8_t *socketID);
++/**
++ * To parse the IP address and port from "ipaddress:port".
++ * @param[in]   ipAddrStr       IP address to be parsed.
++ * @param[out]  ipAddr          Parsed IP address.
++ * @param[in]   ipAddr          Buffer length for parsed IP address.
++ * @param[out]  port            Parsed Port number.
++ * @return ::CA_STATUS_OK or Appropriate error code.
++ */
++extern OCResult_t arduino_parse_IPv4_addr(const char *ipAddrStr, uint8_t *ipAddr,
++                                      uint8_t ipAddrLen, uint16_t *port);
++/**
++* Get the Interface Info(Allocated IP address)
++* @param[in] address  endpoint ipv4 address
++*/
++OCResult_t oc_ard_get_iface_addr(uint8_t *address);
++
++
++
++extern OCResult_t ard_send_data(uint8_t socketID, uint8_t *dest_addr,
++								uint16_t *dest_port, uint8_t *data, const uint16_t len);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* OC_ARDUINO_ETHERNET_ADAPTER_UTILS_ */
+diff --git a/port/arduino/adapter/ipadapter.c b/port/arduino/adapter/ipadapter.c
+new file mode 100644
+index 00000000..aabf9be6
+--- /dev/null
++++ b/port/arduino/adapter/ipadapter.c
+@@ -0,0 +1,318 @@
++/******************************************************************
++*
++* Copyright 2018 iThemba LABS All Rights Reserved.
++*
++* Licensed under the Apache License, Version 2.0 (the "License");
++* you may not use this file except in compliance with the License.
++* You may obtain a copy of the License at
++
++*    http://www.apache.org/licenses/LICENSE-2.0
++
++* Unless required by applicable law or agreed to in writing, software
++* distributed under the License is distributed on an "AS IS" BASIS,
++* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++* See the License for the specific language governing permissions and
++* limitations under the License.
++*
++******************************************************************/
++#include "oc_buffer.h"
++#include "oc_endpoint.h"
++#include "ipcontext.h"
++#include "util/oc_process.h"
++#include "util/oc_etimer.h"
++#include "port/oc_assert.h"
++#include "port/oc_connectivity.h"
++#include "ethadapter_utils.h"
++
++OC_PROCESS(ip_adapter_process, "IP Adapter");
++OC_LIST(ip_contexts);
++OC_MEMB(ip_context_s, ip_context_t, OC_MAX_NUM_DEVICES);
++OC_MEMB(device_eps, oc_endpoint_t, 2*OC_MAX_NUM_DEVICES); // fix
++
++void
++oc_network_event_handler_mutex_init(void){}
++
++void
++oc_network_event_handler_mutex_lock(void){}
++
++void
++oc_network_event_handler_mutex_unlock(void){}
++
++void oc_network_event_handler_mutex_destroy(void) {}
++
++static ip_context_t *
++get_ip_context_for_device(size_t device)
++{
++  ip_context_t *dev = oc_list_head(ip_contexts);
++  while (dev != NULL && dev->device != device) {
++    dev = dev->next;
++  }
++  if (!dev) {
++    return NULL;
++  }
++  return dev;
++}
++
++static void
++free_endpoints_list(ip_context_t *dev)
++{
++  oc_endpoint_t *ep = oc_list_pop(dev->eps);
++
++  while (ep != NULL) {
++    oc_memb_free(&device_eps, ep);
++    ep = oc_list_pop(dev->eps);
++  }
++}
++/*We not handling potential change of network interface as yet*/
++static void
++get_interface_addresses(ip_context_t *dev, uint16_t port, bool secure)
++{
++  oc_endpoint_t ep;
++  memset(&ep, 0, sizeof(oc_endpoint_t));
++  ep.flags = IPV4;
++  oc_ard_get_iface_addr(ep.addr.ipv4.address);
++  ep.addr.ipv4.port = port;
++  if (secure) {
++    ep.flags |= SECURED;
++  }
++  oc_endpoint_t *new_ep = oc_memb_alloc(&device_eps);
++  if (!new_ep) {
++    return;
++  }
++  memcpy(new_ep, &ep, sizeof(oc_endpoint_t));
++  oc_list_add(dev->eps, new_ep);
++}
++
++static void
++refresh_endpoints_list(ip_context_t *dev)
++{
++  free_endpoints_list(dev);
++  get_interface_addresses(dev, dev->port4, false);
++#ifdef OC_SECURITY
++  get_interface_addresses(dev, dev->dtls4_port, true);
++#endif /* OC_SECURITY */
++}
++
++oc_endpoint_t *
++oc_connectivity_get_endpoints(size_t device)
++{
++  ip_context_t *dev = get_ip_context_for_device(device);
++  if (!dev) {
++    return NULL;
++  }
++  if (oc_list_length(dev->eps) == 0) {
++    oc_network_event_handler_mutex_lock();
++    refresh_endpoints_list(dev);
++    oc_network_event_handler_mutex_unlock();
++  }
++  return oc_list_head(dev->eps);
++}
++
++int oc_send_buffer(oc_message_t *message) {
++  PRINT("Outgoing message to: ");
++  PRINTipaddr(message->endpoint);
++  PRINT("\r\n");
++  uint8_t send_sock = 0;
++  uint16_t send_port = 0;
++  ip_context_t *dev = get_ip_context_for_device(message->endpoint.device);
++#ifdef OC_CLIENT
++  if (message->endpoint.flags & DISCOVERY) {
++      send_sock = dev->mcast4_sock;
++      send_port = (uint16_t)OCF_MCAST_PORT_UNSECURED;
++  } else {
++#ifdef OC_SECURITY
++      if (message->endpoint.flags & SECURED) {
++        send_sock = dev->secure4_sock;
++      } else
++#else
++        send_sock = dev->server4_sock;
++#endif
++      send_port = message->endpoint.addr.ipv4.port;
++  }
++#endif
++
++#ifdef OC_SERVER
++#ifdef OC_SECURITY
++  if (message->endpoint.flags & SECURED) {
++    send_sock = dev->secure4_sock;
++  } else
++#else
++  {
++    send_sock = dev->server4_sock;
++  }
++#endif
++    send_sock = dev->server4_sock;
++    send_port = message->endpoint.addr.ipv4.port;
++#endif
++  ard_send_data(send_sock, message->endpoint.addr.ipv4.address, &send_port,
++                         message->data, message->length);
++  return message->length;
++}
++
++#ifdef OC_CLIENT
++void
++oc_send_discovery_request(oc_message_t *message)
++{
++  oc_send_buffer(message);
++}
++#endif /* OC_CLIENT */
++
++int
++oc_connectivity_init(size_t device)
++{
++  OC_DBG("Initializing IPv4 connectivity for device %d", device);
++  ip_context_t *dev = (ip_context_t *)oc_memb_alloc(&ip_context_s);
++  if (!dev) {
++    oc_abort("drained mem");
++  }
++  oc_list_add(ip_contexts, dev);
++  dev->device = device;
++  OC_LIST_STRUCT_INIT(dev, eps);
++
++  uint16_t mcast_port = (uint16_t)OCF_MCAST_PORT_UNSECURED;
++  dev->port4 = (uint16_t)OCF_PORT_UNSECURED;
++  dev->server4_sock = start_udp_server(&dev->port4);
++#ifdef OC_SERVER
++  dev->mcast4_sock = start_udp_mcast_server(OCF_IPv4_MULTICAST, &mcast_port, &mcast_port);
++#endif
++#ifdef OC_CLIENT
++  dev->mcast4_sock = start_udp_mcast_server(OCF_IPv4_MULTICAST, &mcast_port, &dev->port4);
++#endif
++#ifdef OC_SECURITY
++    dev->dtls4_port = (uint16_t)OCF_PORT_SECURED;
++    dev->secure4_sock = start_udp_server(&dev->dtls4_port);
++#endif
++  oc_process_start(&ip_adapter_process, dev);
++
++  OC_DBG("=======ip port info.========");
++  OC_DBG("  ipv4 port   : %u", dev->port4);
++#ifdef OC_SECURITY
++  OC_DBG("  ipv4 secure : %u", dev->dtls4_port);
++#endif
++  OC_DBG("Successfully initialized connectivity for device %d", device);
++  return 0;
++}
++
++void
++oc_connectivity_shutdown(size_t device)
++{
++  ip_context_t *dev = get_ip_context_for_device(device);
++  oc_process_exit(&ip_adapter_process);
++  close(dev->server4_sock);
++  close(dev->mcast4_sock);
++#ifdef OC_SECURITY
++  close(dev->secure4_sock);
++#endif /* OC_SECURITY */
++  free_endpoints_list(dev);
++  oc_list_remove(ip_contexts, dev);
++  oc_memb_free(&ip_context_s, dev);
++  OC_DBG("oc_connectivity_shutdown for device %d", device);
++}
++
++static adapter_receive_state_t
++oc_udp_receive_message(ip_context_t *dev, sdset_t *sds, oc_message_t *message)
++{
++
++  // unsecure unicast reception
++  if (!SD_ISSET(dev->server4_sock, sds)) {
++      int count = recv_msg(&dev->server4_sock,message->endpoint.addr.ipv4.address,
++                          &message->endpoint.addr.ipv4.port, message->data, sds->rcv_size);
++    if (count < 0) {
++      return ADAPTER_STATUS_ERROR;
++    }
++    message->length = (size_t)count;
++    message->endpoint.flags = IPV4;
++    SD_SET(dev->server4_sock, sds);
++    return ADAPTER_STATUS_RECEIVE;
++  }
++  // multcast reception
++  if (!SD_ISSET(dev->mcast4_sock, sds)) {
++      int count = recv_msg(&dev->mcast4_sock,message->endpoint.addr.ipv4.address,
++                          &message->endpoint.addr.ipv4.port, message->data, sds->rcv_size);
++    if (count < 0) {
++      return ADAPTER_STATUS_ERROR;
++    }
++    message->length = (size_t)count;
++    message->endpoint.flags = IPV4 | MULTICAST;
++    SD_SET(dev->mcast4_sock, sds);
++    return ADAPTER_STATUS_RECEIVE;
++  }
++#ifdef OC_SECURITY
++  if (!SD_ISSET(dev->secure4_sock, sds)) {
++      int count = recv_msg(&dev->secure4_sock,message->endpoint.addr.ipv4.address,
++                          &message->endpoint.addr.ipv4.port, message->data, sds->rcv_size);
++    if (count < 0) {
++      return ADAPTER_STATUS_ERROR;
++    }
++    message->length = (size_t)count;
++    message->endpoint.flags = IPV4 | SECURED;
++    message->encrypted = 1;
++    SD_SET(dev->secure4_sock, sds);
++    return ADAPTER_STATUS_RECEIVE;
++  }
++#endif
++  return ADAPTER_STATUS_NONE;
++}
++
++static void
++oc_udp_add_socks_to_SD_SET(ip_context_t *dev)
++{
++  SD_ZERO(&dev->rsds);
++  OC_DBG("reset sockets descriptor: %d", dev->rsds.sdsset);
++  SD_SET(dev->server4_sock, &dev->rsds);
++  SD_SET(dev->mcast4_sock, &dev->rsds);
++#ifdef OC_SECURITY
++  SD_SET(dev->secure4_sock, &dev->rsds);
++#endif
++}
++
++OC_PROCESS_THREAD(ip_adapter_process, ev, data)
++{
++  static struct oc_etimer et;
++  uint8_t i = 0, n = 0;
++  OC_PROCESS_BEGIN();
++  static uint8_t maxsd;
++  static ip_context_t *dev;
++  static sdset_t setsds;
++  while (ev != OC_PROCESS_EVENT_EXIT) {
++    oc_etimer_set(&et, (oc_clock_time_t)0.01);
++
++    if(ev == OC_PROCESS_EVENT_INIT){
++
++      dev = (ip_context_t *)data;
++      oc_udp_add_socks_to_SD_SET(dev);
++      memcpy(&setsds, &dev->rsds, sizeof(sdset_t));
++      maxsd =  (dev->server4_sock > dev->mcast4_sock) ? dev->server4_sock : dev->mcast4_sock;
++#ifdef OC_SECURITY
++      maxsd = (dev->secure4_sock > dev->mcast4_sock) ? dev->secure4_sock : dev->mcast4_sock;
++#endif
++      OC_DBG("ipadapter: Initialized ip_adapter_process");
++    }
++    else if(ev == OC_PROCESS_EVENT_TIMER){
++      n = select( maxsd + 1 , &setsds);
++      if(n > 0) {
++        for(i = 0; i < n; i++) {
++
++          oc_message_t *message = oc_allocate_message();
++          if (!message) {
++            break;
++          }
++          message->endpoint.device = dev->device;
++          if (oc_udp_receive_message(dev, &setsds, message) ==
++            ADAPTER_STATUS_RECEIVE) {
++            goto common;
++          }
++          oc_message_unref(message);
++          continue;
++        common:
++          PRINT("Incoming message of size %u bytes from ", message->length);
++          PRINTipaddr(message->endpoint);
++          PRINT("\r\n");
++          oc_network_event(message);
++        }
++      }
++    }
++    OC_PROCESS_WAIT_EVENT();
++  }
++ OC_PROCESS_END();
++}
+diff --git a/port/arduino/adapter/ipcontext.h b/port/arduino/adapter/ipcontext.h
+new file mode 100644
+index 00000000..a31b6167
+--- /dev/null
++++ b/port/arduino/adapter/ipcontext.h
+@@ -0,0 +1,58 @@
++/****************************************************************************
++ *
++ * Copyright 2018 Samsung Electronics All Rights Reserved.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
++ * either express or implied. See the License for the specific
++ * language governing permissions and limitations under the License.
++ *
++ ****************************************************************************/
++
++#ifndef IPCONTEXT_H
++#define IPCONTEXT_H
++
++#include "oc_endpoint.h"
++#include "ethadapter_utils.h"
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C"
++{
++#endif
++
++typedef enum {
++  ADAPTER_STATUS_NONE = 0, /* Nothing happens */
++  ADAPTER_STATUS_ACCEPT,   /* Receiving no meaningful data */
++  ADAPTER_STATUS_RECEIVE,  /* Receiving meaningful data */
++  ADAPTER_STATUS_ERROR     /* Error */
++} adapter_receive_state_t;
++
++
++typedef struct ip_context_t {
++  struct ip_context_t *next;
++  OC_LIST_STRUCT(eps);
++  uint8_t mcast4_sock;
++  uint8_t server4_sock;
++  uint16_t port4;
++#ifdef OC_SECURITY
++  uint8_t secure4_sock;
++  uint16_t dtls4_port;
++#endif /* OC_SECURITY */
++  uint8_t terminate;
++  uint8_t device;
++  sdset_t rsds;
++} ip_context_t;
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* IPCONTEXT_H */
+diff --git a/port/arduino/adapter/oc_clock.c b/port/arduino/adapter/oc_clock.c
+new file mode 100644
+index 00000000..3daeacb8
+--- /dev/null
++++ b/port/arduino/adapter/oc_clock.c
+@@ -0,0 +1,96 @@
++/******************************************************************
++*
++* Copyright 2018 iThemba LABS All Rights Reserved.
++*
++* Licensed under the Apache License, Version 2.0 (the "License");
++* you may not use this file except in compliance with the License.
++* You may obtain a copy of the License at
++
++*    http://www.apache.org/licenses/LICENSE-2.0
++
++* Unless required by applicable law or agreed to in writing, software
++* distributed under the License is distributed on an "AS IS" BASIS,
++* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++* See the License for the specific language governing permissions and
++* limitations under the License.
++*
++******************************************************************/
++#include <stdlib.h>
++#include <Arduino.h>
++#include "port/oc_clock.h"
++#include "port/oc_log.h"
++#include "TimeLib.h"
++
++#define SERIAL_TIMEOUT 50   // 50ms wait for client response: may need adjustment
++#define TIME_REQUEST  7    // ASCII bell character requests a time sync message
++#define DEFAULT_TIME  ((time_t)(1357041600UL))
++
++ void
++oc_clock_init(void)
++{
++
++  #ifdef SERIAL_TIME
++  setSyncProvider(requestSync);  //set function to call when sync required
++  #endif
++  setTime(DEFAULT_TIME);
++}
++/*Wont it be better to have a millissecond based system time?*/
++oc_clock_time_t
++oc_clock_time(void)
++{
++    oc_clock_time_t time = (oc_clock_time_t)secondNow();
++    return time * OC_CLOCK_CONF_TICKS_PER_SECOND;
++}
++
++unsigned long
++oc_clock_seconds(void)
++{
++    oc_clock_time_t time = (oc_clock_time_t)secondNow();
++    return time;
++}
++
++void
++oc_clock_wait(oc_clock_time_t t)
++{
++  oc_clock_time_t interval = (oc_clock_time_t)ceil( t / 1.e09);
++  oc_clock_time_t beginWait = (oc_clock_time_t)micros();
++  while((micros() - beginWait) <= interval ){
++   //nop
++  }
++}
++#ifdef WEB_TIME
++#endif
++
++#ifdef SERIAL_TIME
++  /* the user program(iotivity client can listen to serial event)
++  *  on a separate thread, get thus the pctime convert to systime and send on serial link(T1357041600)
++  *  Used ntp from client to form a system time(number of second since 1970) and send to Arduino
++  *  Arduino can sync with its own ntp time from init(setup). it should not try that in loop unless
++  *  the server code is sleeping or blocked
++  *
++  */
++time_t requestSync() {
++
++  // request for time sync from serial client
++  iotivitySerial_write(TIME_REQUEST)
++  oc_clock_time_t pctime = 0;
++  oc_clock_time_t beginWait = millis();
++  while (millis() - beginWait < SERIAL_TIMEOUT) {
++    if (iotivitySerial_available()) { // receive response from client?
++      if(iotivitySerial_find(TIME_HEADER)) {
++        pctime = iotivitySerial_parseInt();
++        if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
++          //setTime(pctime);
++          return pctime;//setTime(pctime); // let the Sync Arduino clock to the time received on the serial port
++        }
++      }
++    }
++    //setTime(pctime);
++    return pctime; // nothing on receive buffer
++  }
++}
++#endif
++
++#ifdef RTC_TIME
++#endif
++
+diff --git a/port/arduino/adapter/oc_config.h b/port/arduino/adapter/oc_config.h
+new file mode 100644
+index 00000000..f7dcef91
+--- /dev/null
++++ b/port/arduino/adapter/oc_config.h
+@@ -0,0 +1,93 @@
++/******************************************************************
++*
++* Copyright 2018 iThemba LABS All Rights Reserved.
++*
++* Licensed under the Apache License, Version 2.0 (the "License");
++* you may not use this file except in compliance with the License.
++* You may obtain a copy of the License at
++
++*    http://www.apache.org/licenses/LICENSE-2.0
++
++* Unless required by applicable law or agreed to in writing, software
++* distributed under the License is distributed on an "AS IS" BASIS,
++* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++* See the License for the specific language governing permissions and
++* limitations under the License.
++*
++******************************************************************/
++
++#ifndef CONFIG_H
++#define CONFIG_H
++
++/* Time resolution */
++#include <stdint.h>
++#include <TimeLib.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define OCF_MCAST_PORT_UNSECURED (5683)
++#define OCF_PORT_UNSECURED (56789)
++#define OCF_PORT_SECURED (42536)
++/** Multicast IP address.*/
++#define OCF_IPv4_MULTICAST      "224.0.1.187"
++
++typedef uint32_t oc_clock_time_t;
++
++#define OC_CLOCK_CONF_TICKS_PER_SECOND (1)
++#define MBEDTLS_TLS_ECDH_ANON_WITH_AES_128_CBC_SHA256 0xFF00
++
++/* Security Layer */
++/* Max inactivity timeout before tearing down DTLS connection */
++#define OC_DTLS_INACTIVITY_TIMEOUT (5000)
++
++
++/* If we selected support for dynamic memory allocation */
++#ifdef OC_DYNAMIC_ALLOCATION
++#define OC_BLOCK_WISE
++#define OC_COLLECTIONS // why? i got this error: api/oc_ri.c:1064:10: error: 'resource_is_collection' undeclared (first use in this function)
++#else /* OC_DYNAMIC_ALLOCATION */
++
++#define OC_BYTES_POOL_SIZE (2000)
++#define OC_INTS_POOL_SIZE (100)
++#define OC_DOUBLES_POOL_SIZE (2)
++
++/* Server-side parameters */
++/* Maximum number of server resources */
++#define OC_MAX_APP_RESOURCES (4)
++
++/* Common paramters */
++/* Prescriptive lower layers MTU size, enable block-wise transfers */
++#define OC_BLOCK_WISE_SET_MTU (700)
++
++/* Maximum size of request/response payloads */
++#ifndef OC_DYNAMIC_ALLOCATION
++#define OC_MAX_APP_DATA_SIZE (800)
++#endif
++/* Maximum number of concurrent requests */
++#define OC_MAX_NUM_CONCURRENT_REQUESTS (3)
++
++/* Maximum number of nodes in a payload tree structure */
++#define OC_MAX_NUM_REP_OBJECTS (15)
++
++/* Number of devices on the OCF platform */
++#define OC_MAX_NUM_DEVICES (1)
++
++/* Maximum number of endpoints */
++#define OC_MAX_NUM_ENDPOINTS (4)
++
++/* Security layer */
++/* Maximum number of authorized clients */
++#define OC_MAX_NUM_SUBJECTS (2)
++
++/* Maximum number of concurrent (D)TLS sessions */
++#define OC_MAX_TLS_PEERS (1)
++
++
++#endif /* !OC_DYNAMIC_ALLOCATION */
++
++#ifdef __cplusplus
++}
++#endif
++#endif /* CONFIG_H */
+diff --git a/port/arduino/adapter/random.c b/port/arduino/adapter/random.c
+new file mode 100644
+index 00000000..2ffc2e6f
+--- /dev/null
++++ b/port/arduino/adapter/random.c
+@@ -0,0 +1,95 @@
++/******************************************************************
++*
++* Copyright 2018 iThemba LABS All Rights Reserved.
++*
++* Licensed under the Apache License, Version 2.0 (the "License");
++* you may not use this file except in compliance with the License.
++* You may obtain a copy of the License at
++
++*    http://www.apache.org/licenses/LICENSE-2.0
++
++* Unless required by applicable law or agreed to in writing, software
++* distributed under the License is distributed on an "AS IS" BASIS,
++* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++* See the License for the specific language governing permissions and
++* limitations under the License.
++*
++******************************************************************/
++#include "port/oc_random.h"
++#include "port/oc_log.h"
++#include "oc_helpers.h"
++
++#if defined(__AVR__)
++#include "prng.h"
++#elif defined(__SAMD21G18A__)
++#include <WMath.h>
++#include "stdlib.h"
++#include "stdint.h"
++// This temporary: one need to implment the prng for samd ARCH
++void random32Seed( uint32_t dwSeed )
++{
++  if ( dwSeed != 0 )
++    srand( dwSeed );
++}
++long random32(long max) {
++  if ( max == 0 )
++    return 0 ;
++  return rand() % max;
++}
++extern long _random32( long howsmall, long howbig )
++{
++  if (howsmall >= howbig)
++  {
++    return howsmall;
++  }
++
++  long diff = howbig - howsmall;
++
++  return random32(diff) + howsmall;
++}
++#elif defined(__SAM3X8E__)
++#include <sam.h>
++#include <trng.h>
++#endif
++
++void
++oc_random_init(void)
++{
++#if defined(__AVR__)
++  _prng_holder = prng_create();
++#elif defined(__SAM3X8E__ )
++  pmc_enable_periph_clk(ID_TRNG);
++  TRNG->TRNG_IDR = 0xFFFFFFFF;
++  TRNG->TRNG_CR = TRNG_CR_KEY(0x524e47) | TRNG_CR_ENABLE;
++#elif defined(__SAMD21G18A__)
++  random32Seed(analogRead(0));
++#endif
++}
++
++unsigned int
++oc_random_value(void)
++{
++unsigned int rand_val = 0;
++#if defined(__AVR__)
++  if(_prng_holder == NULL) {
++    _prng_holder = prng_create();
++  }
++  if (_prng_holder == NULL)
++      return 0;
++  rand_val =  (unsigned int)prng_getRndInt(_prng_holder);
++#elif defined(__SAM3X8E__ )
++  while (! (TRNG->TRNG_ISR & TRNG_ISR_DATRDY));
++  rand_val = TRNG->TRNG_ODATA;
++#elif defined(__SAMD21G18A__)
++  rand_val = random32( 1 << 16 );
++#endif
++  return rand_val;
++}
++
++void
++oc_random_destroy(void)
++{
++#ifdef __AVR__
++  prng_destroy(_prng_holder);
++#endif
++}
+diff --git a/port/arduino/adapter/storage.c b/port/arduino/adapter/storage.c
+new file mode 100644
+index 00000000..df96729e
+--- /dev/null
++++ b/port/arduino/adapter/storage.c
+@@ -0,0 +1,102 @@
++#ifdef OC_SECURITY
++#include <errno.h>
++#include <stdio.h>
++#include <string.h>
++#include "port/oc_storage.h"
++#include "port/oc_log.h"
++#include "sdfat.h"
++#define STORE_PATH_SIZE 20
++// SD chip select pin
++#if defined(__AVR__) || defined(__SAM3X8E__)
++const uint8_t chipSelect = 4;
++#elif defined(__SAMD21G18A__)
++const uint8_t chipSelect = SDCARD_SS_PIN;
++#else
++#warning Please update Eth shield chip select
++#endif
++
++
++static char store_path[STORE_PATH_SIZE];
++static int8_t store_path_len;
++
++void list_dir(){
++// Initialize at the highest speed supported by the board that is
++  // not over 50 MHz. Try a lower speed if SPI errors occur.
++  if (!sdfile_open_read(_file_holder,"/", O_RDONLY)) {
++    sdfat_errorHalt(_sd_holder, "open root failed");
++  }
++  // list all files in the card with date and size
++  sdfile_ls(_file_holder);
++}
++
++int oc_storage_config(const char *store)
++{
++  store_path_len = strlen(store);
++  if (store_path_len > STORE_PATH_SIZE){
++    return -ENOENT;
++  }
++  strncpy(store_path, store, store_path_len);
++  store_path[store_path_len] = '\0';
++  _sd_holder = sdfat_create();
++  /* Initialize at the highest speed supported by the board that is
++   not over 50 MHz. Try a lower speed if SPI errors occur.*/
++  if (!sdfat_begin(_sd_holder, chipSelect)) {
++    sdfat_initErrorHalt(_sd_holder);
++    return -1;
++  }
++  OC_WRN("initialization done.");
++  if( !sdfat_exists(_sd_holder, store_path))
++  {
++    if(!sdfat_mkdir(_sd_holder, store_path) )
++    {
++      OC_ERR("Error creating sec dir");
++    }
++  }
++  _file_holder = sdfile_create();
++  list_dir();
++  sdfile_close(_file_holder);
++  return 0;
++}
++
++
++long
++oc_storage_write(const char *store, uint8_t *buf, size_t len)
++{
++  size_t store_len = strlen(store);
++  store_path[store_path_len] = '/';
++  strncpy(store_path + store_path_len + 1, store, store_len);
++  store_path[1 + store_path_len + store_len] = '\0';
++  sdfile_open_write(_file_holder, store_path, O_WRONLY | O_CREAT | O_TRUNC);
++  if(!sdfile_isOpen(_file_holder)) {
++    return -1;
++  }else {
++		if((len  =  sdfile_write(_file_holder, buf, len)) == -1) {
++			OC_ERR("Error writing to: %s",store_path );
++			return -1;
++		}
++		sdfile_close(_file_holder);
++  }
++  return len;
++}
++
++long
++oc_storage_read(const char *store, uint8_t *buf, size_t len)
++{
++  size_t store_len = strlen(store);
++  store_path[store_path_len] = '/';
++  strncpy(store_path + store_path_len + 1, store, store_len);
++  store_path[1 + store_path_len + store_len] = '\0';
++  sdfile_open_read(_file_holder, store_path,  O_RDONLY);
++  if(!sdfile_isOpen(_file_holder)) {
++    OC_ERR("error opening %s", store_path);
++    return -1;
++  }
++  while(sdfile_available(_file_holder)){
++    if((len  =  sdfile_read(_file_holder, buf, len)) == -1) {
++      OC_ERR("Error reading from: %s",store_path );
++    }
++  }
++  sdfile_close(_file_holder);
++  return len;
++}
++#endif /* OC_SECURITY */
+diff --git a/port/arduino/arm_tools_cores.PNG b/port/arduino/arm_tools_cores.PNG
+new file mode 100755
+index 0000000000000000000000000000000000000000..57bad4d21cedbf82a2fe13db0c1fbcaa6d2ffd33
+GIT binary patch
+literal 16219
+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
+LZCY~f)|3AMuMrmo
+
+literal 0
+HcmV?d00001
+
+diff --git a/port/arduino/avr.mk b/port/arduino/avr.mk
+new file mode 100644
+index 00000000..c8bb57b6
+--- /dev/null
++++ b/port/arduino/avr.mk
+@@ -0,0 +1,81 @@
++### BOARD_TAG
++### It must be set to the board you are currently using. (i.e uno, mega2560, etc.)
++BOARD_TAG    = mega2560
++
++### Variant Frequency
++F_CPU	 = 16000000L
++### Board Chip
++MCU?=at$(BOARD_TAG)
++
++### MCU ARCH
++ARCHITECTURE=avr
++
++#MCU VAriant
++VARIANT		= mega
++### FLASHING_BAUDRATE: todo detect the board tag to select the correct flash rate
++AVRDUDE_ARD_BAUDRATE = 115200
++### MONITOR_BAUDRATE
++### It must be set to Serial baudrate value you are using.
++MONITOR_BAUDRATE  = $(AVRDUDE_ARD_BAUDRATE)
++
++### AVR_TOOLS_DIR
++### Path to the AVR tools directory such as avr-gcc, avr-g++, etc.
++AVR_TOOLS_DIR     = $(ARDUINO_DIR)/hardware/tools/avr
++### or on Linux: (remove the one you don't want)
++
++### AVRDUDE
++AVRDUDE_ARD_PROGRAMMER = wiring
++
++
++### If avr-gcc -v is higher than 4.9, activate coloring of the output
++ifeq "$(AVR_GCC_VERSION)" "1"
++    CXXFLAGS += -fdiagnostics-color
++endif
++
++### External Memory Options
++## 64 KB of external RAM, starting after internal RAM (ATmega128!),
++## used for variables (.data/.bss) and heap (malloc()).
++## 64 KB of external RAM, starting after internal RAM (ATmega128!),
++## only used for heap (malloc()).
++
++ifeq ($(XMEM),1)
++#                         0x2200             0xffff
++# -----------------------------------------------
++#|				|	<---- |	.data	 | .bss     | ---> |	 |
++#|				|	stack |variable|	variable| heap |	 |
++#|				|				|				 |		      |      |   |
++# -----------------------------------------------
++EXTMEMOPTS = -Wl,-Map,MegaXmem.map -Wl,--section-start,.data=0x802200,--defsym=__heap_end=0x80ffff,--defsym=__stack=0x8021ff
++
++#                         0x802200             0x80ffff
++# ---------------------------------------------------
++#| .data		|	.bss      |       |<---- |   |---> |	 |
++#| variable	|	variables |       |stack |   |heap |	 |
++#|					|			      |				|			 |	 |     |   |
++# ---------------------------------------------------
++#EXTMEMOPTS = -Wl,--defsym=__heap_start=0x802200,--defsym=__heap_end=0x80ffff
++
++#                 0x8021ff 0x802200          0x80ffff
++# -------------------------------------------
++#| .bss		  |      |<---- |  .data |---> |	 |
++#| variable	|      |stack |variable|heap |	 |
++#|					|      |		  |        |     |   |
++# -------------------------------------------
++#EXTMEMOPTS = -Wl,-Map,MegaDataXmem.map -Wl,--section-start,.bss=0x800200 -Wl,--section-start,.data=0x802200,--defsym=__heap_end=0x80ffff,--defsym=__heap_start=0x802200
++
++else
++	EXTMEMOPTS =
++endif
++
++LDFLAGS += $(EXTMEMOPTS)
++
++### MONITOR_PORT
++### The port your board is connected to. Using an '*' tries all the ports and finds the right one.
++##MONITOR_PORT   = /dev/ttyUSB*
++MONITOR_PORT     = /dev/ttyACM*
++
++include $(ARDMK_DIR)/Arduino.mk
++
++### CURRENT_DIR
++### Do not touch - used for binaries path
++CURRENT_DIR       = $(shell basename $(CURDIR))
+diff --git a/port/arduino/build_arduino.sh b/port/arduino/build_arduino.sh
+new file mode 100755
+index 00000000..3dbbbdbc
+--- /dev/null
++++ b/port/arduino/build_arduino.sh
+@@ -0,0 +1,200 @@
++#!/bin/bash
++# This script will build iotivity constrained for Arduino#
++# Build system: Debian 32/64 Bits
++# Author: 	Yann
++# Date : 		06-April 2019
++# Recipient: 	Iotivity Lite Gerrit
++
++#Note: We use the script file to better handle build dependancies as the arduino makefile system
++# used need to be patch before compilation can start: it may be easier to provide a dedicated arduino makefile
++
++#######################################################################
++#User interaction functions
++#######################################################################
++print_headings() {
++	echo
++	printf "%bBuild an application for iotivity constrained on Arduino(AVR and ARM)%b\n" "$DBG" "$DEFAULT"
++	printf "%bBuild system: Linux Debian/Ubuntu%b\n" "$DBG" "$DEFAULT"
++	printf "%bBuild Architecture: 32/64 bits%b\n" "$DBG" "$DEFAULT"
++	printf "%bArduino path: \$(HOME)/arduino-home, if not set the option --ardhome='path to arduino home' %b\n" "$DBG" "$DEFAULT"
++	printf "%bArduino Makefile path: \$(PWD)/Arduino-Makefile, if not set the option --ardmk='path to arduino makefile' %b\n" "$DBG" "$DEFAULT"
++	echo
++	printf "%busage: \n  -u|--upload)\tBuild and upload an app\n  -c|--clean)\tClean working path\n  -x|--xmem)\tEnable or disbale external memory(only on avr)%b\n" "$WRN" "$DEFAULT"
++	printf "%b  -s|--secure)\tEnable or disable\n  ---arch)\tSelect a build architecture (avr/samd/sam)\n  --debug)\tSet log level( 1 / 2)%b\n" "$WRN" "$DEFAULT"
++	printf "%b  --app)\tSelect an app (server/client)\n  --ardhome)\tSet path to arduino home\n  --ardmk)\tSet path to arduino makefile\n %b\n" "$WRN" "$DEFAULT"
++	echo
++	sleep 3
++}
++
++install_dependancies(){
++	echo "*********************************************************************"
++	printf "%b      Installing and updating arduino libraries%b\n" "$DBG" "$DEFAULT"
++	echo "*********************************************************************"
++	if [ -d $ARDUINO_HOME ]; then
++		cd $ARDUINO_HOME/libraries
++		for lib in "${LIBS[@]}"; do
++			path=`echo $lib | cut -d '|' -f 1`
++			if [ ! -d $path ]; then
++				remote=`echo $lib | cut -d '|' -f 2`
++				printf "%bInstalling missing library: $remote %b\n" "$WRN" "$DEFAULT"
++				git clone $remote
++			else
++				printf "%bCleaning local libray: $path %b\n" "$WRN" "$DEFAULT"
++				cd $path
++				git clean -fdx .
++				git reset --hard
++				cd ../
++			fi
++			patch_file=$BUILD_PATCHES/$path.patch
++			if [  -f $patch_file ]; then
++				printf "%bApplying patch to $path %b\n" "$WRN" "$DEFAULT"
++				patch -r - -s -N -p1 < $patch_file
++				printf "%bPatch $patch_file succesfully applied%b\n\n" "$DBG" "$DEFAULT"
++			fi
++		done
++  else
++		printf "%bInstall arduino IDE and provide a valid path to proceed%b\n" "$ERR" "$DEFAULT"
++		exit 1
++	fi
++	if [ $ARCH == "samd" ]; then
++		SAMD_RANDOM_PATCH_FILE=$BUILD_PATCHES/samd_random.patch
++		cd ~/.arduino15/packages/arduino/hardware/samd/1.6.20/cores
++		patch -r - -s -N -p1 --dry-run < $SAMD_RANDOM_PATCH_FILE 2>/dev/null
++		#If the patch has not been applied then the $? which is the exit status
++		#for last command would have a success status code = 0
++		if [ $? -eq 0 ]; then
++			printf "%bAdding samd basic random support%b\n" "$DBG" "$DEFAULT"
++			patch -r - -s -N -p1 < $SAMD_RANDOM_PATCH_FILE
++			printf "%bPatch $SAMD_RANDOM_PATCH_FILE  succesfully applied%b\n\n" "$DBG" "$DEFAULT"
++		else
++			printf "%bRandom support for samd already added%b\n" "$WRN" "$DEFAULT"
++		fi
++	fi
++
++}
++install_arduino_makefile() {
++	echo "*********************************************************************"
++	printf "%b    Installing and updating arduino makefile%b\n" "$DBG" "$DEFAULT"
++	echo "*********************************************************************"
++	cd $ROOT
++	if [ ! -d $ARDMK_DIR ]; then
++		git clone $ARDMK_REMOTE
++	else
++		cd $ARDMK_DIR
++		printf "%bCleaning local repository%b\n" "$WRN" "$DEFAULT"
++		git clean -fdx .
++		git reset --hard
++		cd ../
++	fi
++	ARDMK_PATCH_FILE=$BUILD_PATCHES/arduino-mk.patch
++	if [  -f $ARDMK_PATCH_FILE ]; then
++		printf "%bApplying patch to $ARDMK_DIR %b\n" "$WRN" "$DEFAULT"
++		patch -r - -s -N -p1 < $ARDMK_PATCH_FILE
++		printf "%bPatch $patch succesfully applied%b\n" "$DBG" "$DEFAULT"
++	fi
++}
++
++update_core_to_arduino() {
++	echo "********************************************************************************"
++	printf "%b    Enable arduino logs: This add log level to cope for memory constraints%b\n" "$DBG" "$DEFAULT"
++	echo "*********************************************************************************"
++	IOTIVIY_LITE_PATCH_FILE=$BUILD_PATCHES/iotivity_lite.patch
++	cd ../../
++	patch -r - -s -N -p1 --dry-run < $IOTIVIY_LITE_PATCH_FILE 2>/dev/null
++	#If the patch has not been applied then the $? which is the exit status
++	#for last command would have a success status code = 0
++	if [ $? -eq 0 ]; then
++    printf "%bAdding Arduino support to iotivity sources%b\n" "$DBG" "$DEFAULT"
++    patch -r - -s -N -p1 < $IOTIVIY_LITE_PATCH_FILE
++	else
++		printf "%bSources have already been updated %b\n" "$WRN" "$DEFAULT"
++	fi
++}
++
++build_application()
++{
++
++	echo "*********************************************************************"
++	printf "%b      Build and Upload  a User application %b\n" "$DBG" "$DEFAULT"
++	echo "*********************************************************************"
++	cd $ROOT
++  if [ $CLEAN -eq 1 ]; then
++	  make ARCH=$ARCH APP=$APP DYNAMIC=1 SECURE=$SECURE IPV4=1 -f Makefile clean
++  else
++   if [ $UPLOAD -eq 1 ]; then
++      make ARCH=$ARCH APP=$APP DYNAMIC=1 SECURE=$SECURE IPV4=1 XMEM=$XMEM VERBOSE=$VERBOSE -f Makefile upload
++   else
++      make ARCH=$ARCH APP=$APP DYNAMIC=1 SECURE=$SECURE IPV4=1 XMEM=$XMEM VERBOSE=$VERBOSE -f Makefile
++   fi
++  fi
++	sleep 3
++  echo
++}
++
++echo "####################################################################"
++echo "#              Initialize build system "
++echo "####################################################################"
++# saner programming env: these switches turn some bugs into errors
++#set -o errexit -o pipefail -o noclobber -o nounset
++#Define installation environment
++export ARDUINO_USER="$USER"
++export ARDUINO_USER_GROUP=$(groups "$ARDUINO_USER" | sed 's/^.*\s:\s\(\S*\)\s.*$/\1/')
++export ROOT=$PWD
++export ARDUINO_HOME=$HOME/arduino-home
++export ARDMK_DIR=$PWD/Arduino-Makefile
++export ARDMK_REMOTE="https://github.com/sudar/Arduino-Makefile"
++
++declare -a LIBS=('Ethernet2|https://github.com/adafruit/Ethernet2.git' 'pRNG|https://github.com/leomil72/pRNG.git' 'SdFat|https://github.com/greiman/SdFat.git' 'Time|https://github.com/PaulStoffregen/Time.git' )
++export LIBS
++export BUILD_PATCHES=$PWD/patches
++export VERBOSE=0 # dont use DEBUG as te Arduino.mk set optimization to 0 when defined
++export IPV4=1
++export SECURE=0
++export UPLOAD=0
++export DYNAMIC=1
++export XMEM=0
++export ARCH=avr
++export CLEAN=0
++export APP='server'
++export ERR="\033[31;1m"   # red output
++export DBG="\033[32;1m" # greenoutput
++export WRN="\033[33;1m" # yellow output
++export DEFAULT="\033[0m"    # white output
++##################################################
++
++! getopt --test > /dev/null
++if [[ ${PIPESTATUS[0]} -ne 4 ]]; then # PIPESTATUS is an array of exits code just like $?( status of last executed command)
++    echo 'This requires GNU getopt.  On Mac OS X and FreeBSD, you have to install this separately; see below.'
++    exit 1
++fi
++PARSED=`getopt -o csux --long clean,secure,upload,xmem,app:,arch:,ardmk:,ardhome:,debug:\
++             -n '$0' -- "$@"`
++if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
++
++eval set -- "$PARSED"
++while true; do
++  case "$1" in
++    -c | --clean ) CLEAN=1; shift ;;
++    -s | --secure ) SECURE=1; shift ;;
++    -u | --upload ) UPLOAD=1; shift ;;
++    -x | --xmem ) XMEM=1; shift ;;
++    --app ) APP="$2"; shift 2 ;;
++    --arch ) ARCH="$2"; shift 2 ;;
++    --ardmk ) ARDMK_DIR="$2"; shift 2 ;;
++    --ardhome ) ARDUINO_HOME="$2"; shift 2 ;;
++    --debug ) VERBOSE="$2"; shift 2 ;;
++    -- ) shift; break ;;
++    * ) break ;;
++  esac
++done
++#Process the different installation functions
++print_headings
++echo "Options: $CLEAN $VERBOSE $SECURE $UPLOAD $XMEM $APP $ARCH $ARDMK_DIR $ARDUINO_HOME"
++echo
++
++update_core_to_arduino
++install_dependancies
++install_arduino_makefile
++build_application
++
++exit 0
+diff --git a/port/arduino/deps/Time/Makefile b/port/arduino/deps/Time/Makefile
+new file mode 100644
+index 00000000..b874e777
+--- /dev/null
++++ b/port/arduino/deps/Time/Makefile
+@@ -0,0 +1,20 @@
++include ../../setup.mk
++
++ARDUINO_TIME_SRC  = $(wildcard $(ARDUINO_DIR)/libraries/Time/*.cpp)
++
++LOCAL_CPP_SRCS += $(ARDUINO_TIME_SRC)
++VPATH=$(ARDUINO_DIR)/libraries/Time:
++
++ifeq ($(ARCH),avr)
++	include ../../avr.mk
++else ifeq ($(ARCH),sam)
++	include ../../sam.mk
++else ifeq ($(ARCH),samd)
++	include ../../samd.mk
++else
++$(error Target Architecture must be define to proceed!)
++endif
++
++build-$(BOARD_TAG)/libarduino-time.a: $(LOCAL_OBJS)
++	$(AR) rcs $@ $(LOCAL_OBJS)
++
+diff --git a/port/arduino/deps/pRNG/Makefile b/port/arduino/deps/pRNG/Makefile
+new file mode 100644
+index 00000000..de081e5b
+--- /dev/null
++++ b/port/arduino/deps/pRNG/Makefile
+@@ -0,0 +1,21 @@
++###iotivity contrained sources
++include ../../setup.mk
++
++SRC=$(wildcard ./*.cpp)
++
++LOCAL_CPP_SRCS += $(SRC)
++
++
++ifeq ($(ARCH),avr)
++	include ../../avr.mk
++else ifeq ($(ARCH),samd)
++	include .../../samd.mk
++else
++$(error Target Architecture must be define to proceed!)
++endif
++
++
++build-$(BOARD_TAG)/libarduino-prng.a: $(LOCAL_OBJS)
++	$(AR) rcs $@ $(LOCAL_OBJS)
++
++
+diff --git a/port/arduino/deps/pRNG/prng.cpp b/port/arduino/deps/pRNG/prng.cpp
+new file mode 100644
+index 00000000..321afc79
+--- /dev/null
++++ b/port/arduino/deps/pRNG/prng.cpp
+@@ -0,0 +1,58 @@
++#include <Arduino.h>
++#include <stdio.h>
++#include "prng.h"
++#include "pRNG.h"
++
++struct prng {
++    void *prng_ref;
++};
++prng_t *_prng_holder = NULL;
++
++prng_t *prng_create()
++{
++    prng_t *prng_holder;
++    pRNG *prng_ref;
++
++    prng_holder     = (typeof(prng_holder))malloc(sizeof(*prng_holder));
++    prng_ref    = new pRNG();
++    prng_holder->prng_ref = prng_ref;
++    return prng_holder;
++}
++
++void prng_destroy(prng_t *prng_holder)
++{
++    if (prng_holder== NULL)
++        return;
++    delete static_cast<pRNG *>(prng_holder->prng_ref);
++    free(prng_holder);
++}
++uint8_t prng_getRndByte(prng_t *prng_holder){
++
++    pRNG *prng_ref;
++
++    if (prng_holder== NULL)
++        return 1;
++
++    prng_ref = static_cast<pRNG *>(prng_holder->prng_ref);
++    return prng_ref->getRndByte();
++}
++
++uint16_t prng_getRndInt(prng_t *prng_holder){
++
++    pRNG *prng_ref;
++
++    if (prng_holder== NULL)
++        return 1;
++    prng_ref = static_cast<pRNG *>(prng_holder->prng_ref);
++    return prng_ref->getRndInt();
++}
++
++uint32_t prng_getRndLong(prng_t *prng_holder){
++
++    pRNG *prng_ref;
++
++    if (prng_holder== NULL)
++        return 1;
++    prng_ref = static_cast<pRNG *>(prng_holder->prng_ref);
++    return prng_ref->getRndLong();
++}
+\ No newline at end of file
+diff --git a/port/arduino/deps/pRNG/prng.h b/port/arduino/deps/pRNG/prng.h
+new file mode 100644
+index 00000000..49e7cefb
+--- /dev/null
++++ b/port/arduino/deps/pRNG/prng.h
+@@ -0,0 +1,25 @@
++#ifndef __PRNG_H__
++#define __PRNG_H__
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++#include <stdint.h>
++#include <stdlib.h>
++struct prng;
++typedef struct prng prng_t;
++
++extern prng_t *_prng_holder;
++
++prng_t *prng_create();
++void prng_destroy(prng_t *m);
++
++uint8_t prng_getRndByte(prng_t *m);
++uint16_t prng_getRndInt(prng_t *m);
++uint32_t prng_getRndLong(prng_t *m);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __PRNG_H__ */
+diff --git a/port/arduino/deps/sdFat/Makefile b/port/arduino/deps/sdFat/Makefile
+new file mode 100644
+index 00000000..fea042f2
+--- /dev/null
++++ b/port/arduino/deps/sdFat/Makefile
+@@ -0,0 +1,24 @@
++###iotivity contrained sources
++include ../../setup.mk 
++
++SRC=$(wildcard ./*.cpp) 
++
++LOCAL_CPP_SRCS += $(SRC) 
++CORE_HEADERS      +=-I$(ARDUINO_DIR)/libraries/SdFat/src/FatLib
++
++CXXFLAGS += $(CORE_HEADERS)
++
++ifeq ($(ARCH),avr)
++	include ../../avr.mk
++else ifeq ($(ARCH),sam)
++	include ../../sam.mk
++else ifeq ($(ARCH),samd)
++	include ../../samd.mk
++else
++$(error Target Architecture must be define to proceed!)	
++endif
++
++build-$(BOARD_TAG)/libarduino-sdfat.a: $(LOCAL_OBJS)
++	$(AR) rcs $@ $(LOCAL_OBJS)
++	
++
+diff --git a/port/arduino/deps/sdFat/sdfat.cpp b/port/arduino/deps/sdFat/sdfat.cpp
+new file mode 100644
+index 00000000..b13737ae
+--- /dev/null
++++ b/port/arduino/deps/sdFat/sdfat.cpp
+@@ -0,0 +1,173 @@
++#include <Arduino.h>
++#include <stdio.h>
++#include <SdFat.h>
++#include <SdFatConfig.h>
++#include <sdios.h>
++#include <SysCall.h>
++#include "sdfat.h"
++
++
++sdfat_t *_sd_holder = NULL;
++sdfile_t *_file_holder = NULL;
++// can't dynamically create this as it has no destructor
++SdFile cred_file;
++
++sdfat_t *sdfat_create()
++{
++    sdfat_t *sd_holder;
++    SdFat *sd_ref;
++
++    sd_holder = (typeof(sd_holder))malloc(sizeof(*sd_holder));
++    sd_ref    = new SdFat();
++    sd_holder->sd = sd_ref;
++    return sd_holder;
++}
++
++sdfile_t *sdfile_create()
++{
++    sdfile_t *file_holder;
++    file_holder = (typeof(file_holder))malloc(sizeof(*file_holder));
++    file_holder->file = &cred_file;
++    return file_holder;
++}
++// released sd fat holder and object reference
++bool sdfat_destroy(sdfat_t *sd_holder)
++{
++    if (sd_holder== NULL)
++        return 1;
++    delete static_cast<SdFat *>(sd_holder->sd);
++    free(sd_holder);
++		return 0;
++}
++// release file object and reference
++bool sdfile_destroy(sdfile_t *file_holder)
++{
++    if (file_holder == NULL)
++        return 1;
++    free(file_holder);
++		return 0;
++}
++
++bool sdfat_begin(sdfat_t *sd_holder, uint8_t chip_select){
++
++    SdFat *_sd;
++    if (sd_holder == NULL)
++        return 1;
++
++    _sd = static_cast<SdFat *>(sd_holder->sd);
++	/* Initialize at the highest speed supported by the board that is
++		   not over 50 MHz. Try a lower speed if SPI errors occur.*/
++    return _sd->begin(chip_select,  SPI_HALF_SPEED);
++}
++
++bool sdfat_initErrorHalt(sdfat_t *sd_holder){
++
++    SdFat *_sd;
++    if (sd_holder == NULL)
++        return 1;
++    _sd = static_cast<SdFat *>(sd_holder->sd);
++    _sd->initErrorHalt();
++		return 0;
++}
++
++bool sdfat_errorHalt(sdfat_t *sd_holder, const char* msg){
++
++    SdFat *_sd;
++    if (sd_holder == NULL)
++        return 1;
++    _sd = static_cast<SdFat *>(sd_holder->sd);
++    _sd->errorHalt(msg);
++		return 0;
++}
++/*See if the directory exists, create it if not.*/
++bool sdfat_exists(sdfat_t *sd_holder, const char* path){
++
++    SdFat *_sd;
++    if (sd_holder == NULL)
++        return 1;
++    _sd = static_cast<SdFat *>(sd_holder->sd);
++    return _sd->exists(path);
++}
++/**/
++bool sdfat_mkdir(sdfat_t *sd_holder, const char* path){
++
++    SdFat *_sd;
++    if (sd_holder == NULL)
++        return 1;
++    _sd = static_cast<SdFat *>(sd_holder->sd);
++    return _sd->mkdir(path);
++}
++/*SD file functions*/
++bool sdfile_ls(sdfile_t *file_holder){
++
++    SdFile *_file;
++    if (file_holder == NULL)
++        return 1;
++    _file = static_cast<SdFile *>(file_holder->file);
++    return _file->ls(LS_R | LS_DATE | LS_SIZE);
++}
++// file.open(fileName, O_CREAT | O_WRITE | O_EXCL)
++bool sdfile_open_write(sdfile_t *file_holder, const char* path, oflag_t oflags){
++
++    SdFile *_file;
++    if (file_holder == NULL)
++        return 1;
++    _file = static_cast<SdFile *>(file_holder->file);
++    return _file->open(path, oflags);
++}
++
++bool sdfile_open_read(sdfile_t *file_holder, const char* path, oflag_t oflags){
++
++    SdFile *_file;
++    if (file_holder == NULL)
++        return 1;
++    _file = static_cast<SdFile *>(file_holder->file);
++    return _file->open(path, oflags);
++}
++
++bool sdfile_isOpen(sdfile_t *file_holder){
++
++    SdFile *_file;
++    if (file_holder == NULL)
++        return 1;
++    _file = static_cast<SdFile *>(file_holder->file);
++    return _file->isOpen();
++}
++
++int sdfile_write(sdfile_t *file_holder, const void* buf, size_t nbyte){
++
++    SdFile *_file;
++    if (file_holder == NULL)
++        return 1;
++    _file = static_cast<SdFile *>(file_holder->file);
++    return _file->write(buf, nbyte);
++}
++
++int sdfile_read(sdfile_t *file_holder, void* buf, size_t nbyte){
++
++    SdFile *_file;
++    if (file_holder == NULL)
++        return 1;
++    _file = static_cast<SdFile *>(file_holder->file);
++    return _file->read(buf, nbyte);
++}
++
++bool sdfile_close(sdfile_t *file_holder){
++
++    SdFile *_file;
++    if (file_holder == NULL)
++        return 1;
++    _file = static_cast<SdFile *>(file_holder->file);
++    return _file->close();
++}
++
++uint32_t sdfile_available(sdfile_t *file_holder){
++
++    SdFile *_file;
++    if (file_holder == NULL)
++        return 1;
++    _file = static_cast<SdFile *>(file_holder->file);
++    return _file->available();
++}
++
++
+diff --git a/port/arduino/deps/sdFat/sdfat.h b/port/arduino/deps/sdFat/sdfat.h
+new file mode 100644
+index 00000000..4e90cebe
+--- /dev/null
++++ b/port/arduino/deps/sdFat/sdfat.h
+@@ -0,0 +1,139 @@
++#ifndef __SDFAT_H__
++#define __SDFAT_H__
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++#include <stdint.h>
++#include <stdlib.h>
++#include <FatApiConstants.h>
++// holder for sd objects pointer
++typedef struct _sdFat {
++    void *sd;
++}sdfat_t;
++// holder for my_file object pointers
++typedef struct _sdFile {
++    void *file;
++}sdfile_t;
++
++
++extern sdfat_t *_sd_holder;
++extern sdfile_t *_file_holder;
++
++
++sdfat_t *sdfat_create();
++bool sdfat_destroy(sdfat_t *sd_holder);
++
++sdfile_t *sdfile_create();
++bool sdfile_destroy(sdfile_t *file_holder);
++
++/** Initialize the SD card.
++ * \param[in] csPin SD chip select pin.
++ * \param[in] sd_holder, pointer to sd object.
++ * \return true for success else false.
++*/
++bool sdfat_begin(sdfat_t *sd_holder, uint8_t chipselect);
++/** %Print any SD error code and halt. */
++bool sdfat_initErrorHalt(sdfat_t *sd_holder);
++/** %Print msg, any SD error code, and halt.
++ *
++ * \param[in] sd_holder, pointer to sd object.
++ * \param[in] msg, error message to print.
++*/
++bool sdfat_errorHalt(sdfat_t *sd_holder, const char* msg);
++
++/** Test for the existence of a file in a directory
++ *
++ * \param[in] sd_holder, pointer to the sd object.
++ * \param[in] path Path of the file to be tested for.
++ *
++ * \return true if the file exists else false.
++*/
++bool sdfat_exists(sdfat_t *sd_holder, const char* path);
++/** Make a new directory.
++ *
++ * \param[in] path A path with a valid 8.3 DOS name for the new directory.
++ *
++ * \param[in] sd_holder pointer to sd object.
++ *
++ * \return The value true is returned for success and
++ * the value false is returned for failure.
++*/
++bool sdfat_mkdir(sdfat_t *sd_holder, const char* path);
++/** List directory contents.
++ *\param[in] sd_holder, pointer to the sd object.
++*/
++bool sdfile_ls(sdfile_t *file_holder);
++/** Open a file in the current working directory for reading.
++ * \param[in] sd_holder, pointer to the sd object
++ * \param[in] path A path with a valid 8.3 DOS name for a file to be opened.
++ *
++ * \param[in] oflag bitwise-inclusive OR of open mode flags.
++ *                  See see FatFile::open(FatFile*, const char*, oflag_t).
++ *
++ * \return The value true is returned for success and
++ * the value false is returned for failure.
++*/
++bool sdfile_open_read(sdfile_t *file_holder, const char* path, oflag_t oflags);
++
++/** Open a file in the current working directory for writing.
++ * \param[in] sd_holder, pointer to the sd object
++ * \param[in] path A path with a valid 8.3 DOS name for a file to be opened.
++ * \param[in] oflag bitwise-inclusive OR of open mode flags.
++ *                  See see FatFile::open(FatFile*, const char*, oflag_t).
++ *
++ * \return The value true is returned for success and
++ * the value false is returned for failure.
++*/
++
++bool sdfile_open_write(sdfile_t *file_holder, const char* path, oflag_t oflags);
++
++/** Check if file is open.
++ * \param[in] sd_holder, pointer to the sd objet
++*/
++bool sdfile_isOpen(sdfile_t *file_holder);
++/** Write data to an open file.
++ * \param[in] file_holder, pointer to file object.
++ * \param[in] buf Pointer to the location of the data to be written.
++ *
++ * \param[in] nbyte Number of bytes to write.
++ *
++ * \return For success write() returns the number of bytes written, always
++ * \a nbyte.  If an error occurs, write() returns -1.  Possible errors
++ * include write() is called before a file has been opened, write is called
++ * for a read-only file, device is full, a corrupt file system or an I/O error.
++ *
++*/
++int sdfile_write(sdfile_t *file_holder, const void* buf, size_t nbyte);
++/** Read data from a file starting at the current position.
++ * \param[in] file_holder, pointer to file object.
++ * \param[in] buf Pointer to the location of the data to be written.
++ * \param[out] nbyte Number of bytes read.
++ * \return For success read() returns the number of bytes read.
++ * A value less than \a nbyte, including zero, will be returned
++ * if end of file is reached.
++ * If an error occurs, read() returns -1.  Possible errors include
++ * read() called before a file has been opened, corrupt file system
++ * or an I/O error occurred.
++*/
++int sdfile_read(sdfile_t *file_holder, void* buf, size_t nbyte);
++/** Close a file and force cached data and directory information
++ *  to be written to the storage device.
++ * \param[in] file_holder, pointer to file object.
++ * \return The value true is returned for success and
++ * the value false is returned for failure.
++*/
++bool sdfile_close(sdfile_t *file_holder);
++
++/** \return The number of bytes available from the current position
++ * \param[in] file_holder, pointer to file object.
++ * to EOF for normal files.  Zero is returned for directory files.
++*/
++uint32_t sdfile_available(sdfile_t *file_holder);
++
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __SDFAT_H__ */
+diff --git a/port/arduino/deps/serial/Makefile b/port/arduino/deps/serial/Makefile
+new file mode 100644
+index 00000000..a0cec0cf
+--- /dev/null
++++ b/port/arduino/deps/serial/Makefile
+@@ -0,0 +1,21 @@
++###iotivity contrained sources
++include ../../setup.mk 
++
++SRC=$(wildcard ./*.cpp) 
++
++LOCAL_CPP_SRCS += $(SRC) 
++
++ifeq ($(ARCH),avr)
++	include ../../avr.mk
++else ifeq ($(ARCH),sam)
++	include ../../sam.mk
++else ifeq ($(ARCH),samd)
++	include ../../samd.mk
++else
++$(error Target Architecture must be define to proceed!)	
++endif
++
++build-$(BOARD_TAG)/libarduino-serial.a: $(LOCAL_OBJS)
++	$(AR) rcs $@ $(LOCAL_OBJS)
++	
++
+diff --git a/port/arduino/deps/serial/serial.cpp b/port/arduino/deps/serial/serial.cpp
+new file mode 100644
+index 00000000..6b8567db
+--- /dev/null
++++ b/port/arduino/deps/serial/serial.cpp
+@@ -0,0 +1,115 @@
++#include <Arduino.h>
++#include <stdarg.h>
++#if defined(__SAM3X8E__)
++#include <UARTClass.h>
++#elif defined(__SAMD21G18A__)
++#include "Uart.h"
++#endif
++#include "serial.h"
++#define MAX_LOG_BUFFER_SIZE 80
++
++serial_t *_serial_holder = NULL;
++
++serial_t *serial_create()
++{
++	serial_t *serial_holder;
++#if defined(__AVR__)
++  HardwareSerial *serial_ref;
++#elif defined(__SAM3X8E__)
++  UARTClass *serial_ref;
++#else
++	Serial_ *serial_ref;
++#endif
++	serial_holder = (typeof(serial_holder))malloc(sizeof(*serial_holder));
++
++  serial_ref = &Serial; // the serial object is on the global space get a ref
++  serial_holder->serial = serial_ref;
++  return serial_holder;
++}
++#if defined(__AVR__)
++inline void clean_ref(HardwareSerial *serial_ref)
++#elif defined(__SAM3X8E__)
++inline void clean_ref(UARTClass  *serial_ref)
++#else
++inline void clean_ref(Serial_  *serial_ref)
++#endif
++{
++	serial_ref = NULL;
++}
++
++
++void serial_destroy(serial_t *serial_holder)
++{
++	 if (serial_holder== NULL)
++        return;
++#if defined(__AVR__)
++    clean_ref(static_cast<HardwareSerial *>(serial_holder->serial));
++#elif defined(__SAM3X8E__ )
++    clean_ref(static_cast<UARTClass *>(serial_holder->serial));
++#else
++    clean_ref(static_cast<Serial_ *>(serial_holder->serial));
++#endif
++    free(serial_holder);
++}
++#if defined(__AVR__)
++void avr_log(PROGMEM const char *format, ...) {
++	if(_serial_holder == NULL) {
++    _serial_holder = serial_create();
++  }
++  HardwareSerial *serial_ref;
++
++  if (_serial_holder == NULL)
++      return;
++  serial_ref = static_cast<HardwareSerial *>(_serial_holder->serial);
++  do {
++		va_list ap;
++    va_start(ap, format);
++    uint16_t formatLength = strlen_P((PGM_P)format) ; // cast it to PGM_P , which is const char *
++    if(formatLength == 0 ) return;
++    char print_buffer[MAX_LOG_BUFFER_SIZE];
++    vsnprintf_P(print_buffer, sizeof(print_buffer), (const char *)format, ap);
++    for (char *p = &print_buffer[0]; *p; p++)
++		{
++			// emulate cooked mode for newlines
++			if (*p == '\n')
++			{
++				serial_ref->write('\r');
++			}
++		serial_ref->write(*p);
++		}
++      	va_end(ap);
++	} while (0);
++}
++#else
++void arm_log(const char *format, ...) {
++  if(_serial_holder == NULL) {
++    _serial_holder = serial_create();
++  }
++  if (_serial_holder == NULL)
++      return;
++#if defined(__SAM3X8E__ )
++  UARTClass *serial_ref;
++  serial_ref = static_cast<UARTClass *>(_serial_holder->serial);
++#else
++  Serial_ *serial_ref;
++  serial_ref = static_cast<Serial_ *>(_serial_holder->serial);
++#endif
++  va_list ap;
++  va_start(ap, format);
++  uint16_t formatLength = strlen(format) ; // cast it to PGM_P , which is const char *
++  if(formatLength == 0 ) return;
++  char print_buffer[MAX_LOG_BUFFER_SIZE];
++  vsnprintf(print_buffer, sizeof(print_buffer), (const char *)format, ap);
++  //serial_ref->print(print_buffer);
++  for (char *p = &print_buffer[0]; *p; p++)
++  {
++    // emulate cooked mode for newlines
++    if (*p == '\n')
++    {
++      serial_ref->write('\r');
++    }
++    serial_ref->write(*p);
++  }
++  va_end(ap);
++}
++#endif
+diff --git a/port/arduino/deps/serial/serial.h b/port/arduino/deps/serial/serial.h
+new file mode 100644
+index 00000000..dabe35c3
+--- /dev/null
++++ b/port/arduino/deps/serial/serial.h
+@@ -0,0 +1,40 @@
++#ifndef __SERIAL_H__
++#define __SERIAL_H__
++#include <stdint.h>
++#include <stdlib.h>
++#include "Arduino.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++
++typedef struct _serial {
++    void *serial;
++}serial_t;
++
++extern serial_t *_serial_holder;// = NULL;
++
++#if defined(__AVR__)
++#ifdef __cplusplus
++#define PCF(str)  ((PROGMEM const char *)(F(str)))
++#else
++#define PCF(str)  ((PROGMEM const char *)(PSTR(str)))
++#endif
++void avr_log(PROGMEM const char *format, ...);
++#define AVR_LOG(format, ...) avr_log(PCF(format),##__VA_ARGS__)
++#elif defined(__SAMD21G18A__) || defined(__SAM3X8E__)
++void arm_log(const char *format, ...);
++#define ARM_LOG(format, ...) arm_log(format,##__VA_ARGS__)
++#else
++#error Architecture or board not supported.
++#endif
++
++
++
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __SERIAL_H__ */
+\ No newline at end of file
+diff --git a/port/arduino/deps/wiz5500/Makefile b/port/arduino/deps/wiz5500/Makefile
+new file mode 100644
+index 00000000..1a27299b
+--- /dev/null
++++ b/port/arduino/deps/wiz5500/Makefile
+@@ -0,0 +1,23 @@
++include ../../setup.mk 
++
++SRC=$(wildcard ./*.cpp) 
++LOCAL_CPP_SRCS += $(SRC)
++
++CXXFLAGS +=-I../../adapter/ipadapter/include -I../../../../port \
++          -I$(ARDUINO_DIR)/libraries/Ethernet2/src/utility -I../serial
++          
++          
++ifeq ($(ARCH),avr)
++	include ../../avr.mk
++else ifeq ($(ARCH),sam)
++	include ../../sam.mk
++else ifeq ($(ARCH),samd)
++	include ../../samd.mk
++else
++$(error Target Architecture must be define to proceed!)	
++endif
++
++build-$(BOARD_TAG)/libarduino-wiz5500.a: $(LOCAL_OBJS)
++	$(AR) rcs $@ $(LOCAL_OBJS)
++	
++
+diff --git a/port/arduino/deps/wiz5500/Wiz5500.cpp b/port/arduino/deps/wiz5500/Wiz5500.cpp
+new file mode 100644
+index 00000000..846b301e
+--- /dev/null
++++ b/port/arduino/deps/wiz5500/Wiz5500.cpp
+@@ -0,0 +1,100 @@
++#include <Arduino.h>
++#include "Wiz5500.h"
++#include <w5500.h>
++#include "oc_log.h"
++
++struct wiz5500 {
++    void *w5500_ref;
++};
++// Use this pointer if u dont need the reimplemted methods
++wiz5500_t *wiznet5500 = NULL;
++
++wiz5500_t *wiz5500_create()
++{
++	 wiz5500_t *wiznet_holder;
++	 W5500Class *w5500_ref;
++	// allocate the wrapper memory
++	 wiznet_holder  = (typeof(wiznet_holder))malloc(sizeof(*wiznet_holder));
++	if(wiznet_holder == NULL){
++		OC_ERR("Memory allocation failed for w5500");
++		return NULL;
++	}
++#ifdef ETHERNET_DYNAMIC
++	w5500_ref    = w5500;
++#else
++	w5500_ref    = &w5500;
++#endif
++	wiznet_holder->w5500_ref = w5500_ref;
++	return wiznet_holder;
++}
++
++void wiz5500_destroy(wiz5500_t *wiznet_holder)
++{
++	if (wiznet_holder== NULL)
++  	return;
++    // need to handle release of this resource
++    free(wiznet_holder);
++}
++void wiz5500_getIPAddress(wiz5500_t *wiznet_holder, uint8_t *addr){
++
++	W5500Class *w5500_ref;
++  if (wiznet_holder == NULL) {
++		OC_ERR("w5500 allocated Memory unreachable!");
++	}
++  w5500_ref = static_cast<W5500Class *>(wiznet_holder->w5500_ref);
++  w5500_ref->getIPAddress(addr);
++}
++
++uint16_t wiz5500_getRXReceivedSize(wiz5500_t *wiznet_holder, uint8_t *socketID){
++
++	W5500Class *w5500_ref;
++  if (wiznet_holder == NULL) {
++		OC_ERR("w5500 allocated Memory unreachable!");
++		return 1;
++	}
++  w5500_ref = static_cast<W5500Class *>(wiznet_holder->w5500_ref);
++  return w5500_ref->getRXReceivedSize(*socketID);
++}
++
++uint8_t wiz5500_readSnSR(wiz5500_t *wiznet_holder, uint8_t *socketID){
++
++	W5500Class *w5500_ref;
++ 	if (wiznet_holder == NULL) {
++		OC_ERR("w5500 allocated Memory unreachable!");
++		return 1;
++	}
++  w5500_ref = static_cast<W5500Class *>(wiznet_holder->w5500_ref);
++  return w5500_ref->readSnSR(*socketID);
++}
++// return number of byte written to socket Sn DIPR register
++uint16_t wiz5500_writeSnDIPR(wiz5500_t *wiznet_holder, uint8_t *socketID, uint8_t *mcast_ipaddr){
++
++	W5500Class *w5500_ref;
++  if (wiznet_holder == NULL) {
++		OC_ERR("w5500 allocated Memory unreachable!");
++		return 1;
++	}
++  w5500_ref = static_cast<W5500Class *>(wiznet_holder->w5500_ref);
++  return w5500_ref->writeSnDIPR(*socketID,(uint8_t *)mcast_ipaddr);
++}
++
++// return number of byte written to socket Sn DIPR register
++uint16_t wiz5500_writeSnDHAR(wiz5500_t *wiznet_holder, uint8_t *socketID, uint8_t *mcast_mac_addr){
++	W5500Class *w5500_ref;
++  if (wiznet_holder == NULL) {
++		OC_ERR("w5500 allocated Memory unreachable!");
++		return 1;
++	}
++  w5500_ref = static_cast<W5500Class *>(wiznet_holder->w5500_ref);
++  return w5500_ref->writeSnDHAR(*socketID, mcast_mac_addr);
++}
++
++// return number of byte written to socket Sn DIPR register
++void wiz5500_writeSnDPORT(wiz5500_t *wiznet_holder, uint8_t *socketID, uint16_t *mcast_port){
++	W5500Class *w5500_ref;
++	if (wiznet_holder == NULL) {
++		OC_ERR("w5500 allocated Memory unreachable!");
++	}
++  w5500_ref = static_cast<W5500Class *>(wiznet_holder->w5500_ref);
++  w5500_ref->writeSnDPORT(*socketID, *mcast_port);
++}
+diff --git a/port/arduino/deps/wiz5500/Wiz5500.h b/port/arduino/deps/wiz5500/Wiz5500.h
+new file mode 100644
+index 00000000..0c9f9975
+--- /dev/null
++++ b/port/arduino/deps/wiz5500/Wiz5500.h
+@@ -0,0 +1,65 @@
++#ifndef __WIZ5500_H__
++#define __WIZ5500_H__
++
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++// remove warning: ISO C++11 requires at least one argument for the "..." in a variadic macro
++//#pragma GCC system_header
++#include <Arduino.h>
++
++#define SnMR_CLOSE  ((const uint8_t )0x00)
++#define SnMR_TCP    ((const uint8_t )0x01)
++#define SnMR_UDP    ((const uint8_t )0x02)
++#define SnMR_IPRAW  ((const uint8_t )0x03)
++#define SnMR_MACRAW ((const uint8_t )0x04)
++#define SnMR_PPPOE  ((const uint8_t )0x05)
++#define SnMR_ND     ((const uint8_t )0x20)
++#define SnMR_MULTI  ((const uint8_t )0x80)
++
++#define SnSR_CLOSED      ((const uint8_t )0x00)
++#define SnSR_INIT        ((const uint8_t )0x13)
++#define SnSR_LISTEN      ((const uint8_t )0x14)
++#define SnSR_SYNSENT     ((const uint8_t )0x15)
++#define SnSR_SYNRECV     ((const uint8_t )0x16)
++#define SnSR_ESTABLISHED ((const uint8_t )0x17)
++#define SnSR_FIN_WAIT    ((const uint8_t )0x18)
++#define SnSR_CLOSING     ((const uint8_t )0x1A)
++#define SnSR_TIME_WAIT   ((const uint8_t )0x1B)
++#define SnSR_CLOSE_WAIT  ((const uint8_t )0x1C)
++#define SnSR_LAST_ACK    ((const uint8_t )0x1D)
++#define SnSR_UDP         ((const uint8_t )0x22)
++#define SnSR_IPRAW       ((const uint8_t )0x32)
++#define SnSR_MACRAW      ((const uint8_t )0x42)
++#define SnSR_PPPOE       ((const uint8_t )0x5F)
++
++
++
++
++struct wiz5500;
++typedef struct wiz5500 wiz5500_t;
++
++extern wiz5500_t *wiznet5500;// = NULL;
++
++wiz5500_t *wiz5500_create();
++void wiz5500_destroy(wiz5500_t *wiznet_holder);
++
++// Maybe use a boolean to optimize RAM usage
++void wiz5500_getIPAddress(wiz5500_t *wiznet_holder, uint8_t *addr);
++
++uint8_t wiz5500_readSnSR(wiz5500_t *wiznet_holder, uint8_t *socketID) ;
++
++uint16_t wiz5500_writeSnDIPR(wiz5500_t *wiznet_holder, uint8_t *socketID, uint8_t *_mcast_ipaddr);
++
++uint16_t wiz5500_writeSnDHAR(wiz5500_t *wiznet_holder, uint8_t *socketID, uint8_t *_buff);
++
++void wiz5500_writeSnDPORT(wiz5500_t *wiznet_holder, uint8_t *socketID, uint16_t *mport);
++
++uint16_t wiz5500_getRXReceivedSize(wiz5500_t *wiznet_holder, uint8_t *socketID);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __WIZ5500_H__ */
+diff --git a/port/arduino/patches/Ethernet2.patch b/port/arduino/patches/Ethernet2.patch
+new file mode 100644
+index 00000000..4b60d4e6
+--- /dev/null
++++ b/port/arduino/patches/Ethernet2.patch
+@@ -0,0 +1,141 @@
++diff -ru a/Ethernet2/README.md b/Ethernet2/README.md
++--- a/Ethernet2/README.md	2019-01-30 15:20:45.608212141 +0000
+++++ b/Ethernet2/README.md	2019-01-08 13:36:15.000000000 +0000
++@@ -1,7 +1,21 @@
++-# Deprecated/Archived Library 
+++Ethernet "2" Library for Arduino
+++================================
++ 
++-This library is no longer going to be used, since the official Arduino library has been updated and works great https://github.com/arduino-libraries/Ethernet
+++This Arduino library is for shields that use the **Wiznet [W5500]** chipset only.
+++It does **not** work with other chipsets, such as the original Arduino Ethernet shield which
+++uses the Wiznet [W5100] chipset.
++ 
+++For more information about this library please visit us at: 
+++http://www.arduino.cc/en/Reference/Ethernet
+++
+++
+++W5500 Shields
+++-------------
+++
+++* [Adafruit W5500 Ethernet Shield](https://www.adafruit.com/products/2971)
+++* [Arduino Ethernet Shield v2](https://www.arduino.cc/en/Main/ArduinoEthernetShieldV2)
+++* [Industruino Ethernet module](https://industruino.com/shop/product/ethernet-expansion-module-10)
+++* [Wiznet W5500 Ethernet Shield](http://www.wiznet.co.kr/product-item/w5500-ethernet-shield/)
++ 
++ 
++ License
++diff -ru a/Ethernet2/src/utility/socket.cpp b/Ethernet2/src/utility/socket.cpp
++--- a/Ethernet2/src/utility/socket.cpp	2019-01-30 15:20:45.628212171 +0000
+++++ b/Ethernet2/src/utility/socket.cpp	2019-01-30 15:22:28.978362838 +0000
++@@ -254,6 +254,7 @@
++ {
++   uint8_t head[8];
++   uint16_t data_len=0;
+++	uint16_t data_copied=0;
++   uint16_t ptr=0;
++ 
++   if ( len > 0 )
++@@ -273,11 +274,6 @@
++       *port = (*port << 8) + head[5];
++       data_len = head[6];
++       data_len = (data_len << 8) + head[7];
++-
++-      w5500.read_data(s, ptr, buf, data_len); // data copy.
++-      ptr += data_len;
++-
++-      w5500.writeSnRX_RD(s, ptr);
++       break;
++ 
++     case SnMR::IPRAW :
++@@ -290,11 +286,6 @@
++       addr[3] = head[3];
++       data_len = head[4];
++       data_len = (data_len << 8) + head[5];
++-
++-      w5500.read_data(s, ptr, buf, data_len); // data copy.
++-      ptr += data_len;
++-
++-      w5500.writeSnRX_RD(s, ptr);
++       break;
++ 
++     case SnMR::MACRAW:
++@@ -302,18 +293,21 @@
++       ptr+=2;
++       data_len = head[0];
++       data_len = (data_len<<8) + head[1] - 2;
++-
++-      w5500.read_data(s, ptr, buf, data_len);
++-      ptr += data_len;
++-      w5500.writeSnRX_RD(s, ptr);
++       break;
++ 
++     default :
++       break;
++     }
+++		if (data_len > 0)
+++		{
+++			data_copied = (data_len <= len) ? data_len : len;// only copy the len bytes, rest of is discarded.
+++			w5500.read_data(s, ptr, buf, data_copied); // data copy.
+++			ptr += data_len;
+++			w5500.writeSnRX_RD(s, ptr);
+++		}
++     w5500.execCmdSn(s, Sock_RECV);
++   }
++-  return data_len;
+++	return data_copied;
++ }
++ 
++ /**
++diff -ru a/Ethernet2/src/utility/socket.h b/Ethernet2/src/utility/socket.h
++--- a/Ethernet2/src/utility/socket.h	2019-01-30 15:20:45.628212171 +0000
+++++ b/Ethernet2/src/utility/socket.h	2019-01-08 13:36:15.000000000 +0000
++@@ -6,7 +6,9 @@
++  
++ #ifndef	_SOCKET_H_
++ #define	_SOCKET_H_
++-
+++#ifdef __cplusplus
+++extern "C" {
+++#endif
++ #include "utility/w5500.h"
++ 
++ extern uint8_t socket(SOCKET s, uint8_t protocol, uint16_t port, uint8_t flag); // Opens a socket(TCP or UDP or IP_RAW mode)
++@@ -43,6 +45,8 @@
++   @return 1 if the datagram was successfully sent, or 0 if there was an error
++ */
++ int sendUDP(SOCKET s);
++-
+++#ifdef __cplusplus
+++} // extern "C++"
+++#endif
++ #endif
++ /* _SOCKET_H_ */
++diff -ru a/Ethernet2/src/utility/w5500.h b/Ethernet2/src/utility/w5500.h
++--- a/Ethernet2/src/utility/w5500.h	2019-01-30 15:20:45.628212171 +0000
+++++ b/Ethernet2/src/utility/w5500.h	2019-01-08 13:36:15.000000000 +0000
++@@ -16,12 +16,14 @@
++ 
++ #define MAX_SOCK_NUM 8
++ #include <Arduino.h>
++-#include <SPI.h>
++ 
++-extern uint8_t SPI_CS;
+++typedef uint8_t SOCKET;
++ 
++ 
++-typedef uint8_t SOCKET;
+++#ifdef __cplusplus
+++
+++#include <SPI.h>
+++extern uint8_t SPI_CS;
++ /*
++ class MR {
++ public:
++@@ -416,5 +418,5 @@
++ void W5500Class::swReset() {
++   writeMR( (readMR() | 0x80) );
++ }
++-
+++#endif
++ #endif
+diff --git a/port/arduino/patches/Time.patch b/port/arduino/patches/Time.patch
+new file mode 100644
+index 00000000..749dc11d
+--- /dev/null
++++ b/port/arduino/patches/Time.patch
+@@ -0,0 +1,338 @@
++diff -ru a/Time/Readme.md b/Time/Readme.md
++--- a/Time/Readme.md	2019-01-30 17:11:53.978520590 +0000
+++++ b/Time/Readme.md	2019-01-08 13:36:13.000000000 +0000
++@@ -90,10 +90,10 @@
++   if it is running and connected to the Arduino serial port.
++ 
++ - `TimeSerialDateStrings.pde` adds day and month name strings to the sketch above
++-  Short (3 characters) and long strings are available to print the days of
+++  Short (3 character) and long strings are available to print the days of
++   the week and names of the months.
++ 
++-- `TimeRTC` uses a DS1307 real-time clock to provide time synchronization.
+++- `TimeRTC` uses a DS1307 real time clock to provide time synchronization.
++   A basic RTC library named DS1307RTC is included in the download.
++   To run this sketch the DS1307RTC library must be installed.
++ 
++diff -ru a/Time/Time.cpp b/Time/Time.cpp
++--- a/Time/Time.cpp	2019-01-30 17:11:53.978520590 +0000
+++++ b/Time/Time.cpp	2019-01-08 13:36:13.000000000 +0000
++@@ -41,12 +41,16 @@
++ 
++ void refreshCache(time_t t) {
++   if (t != cacheTime) {
+++    #ifdef __cplusplus
++     breakTime(t, tm); 
+++    #else
+++    breakTime(t, &tm); 
+++    #endif
++     cacheTime = t; 
++   }
++ }
++ 
++-int hour() { // the hour now 
+++int hourNow() { // the hour now 
++   return hour(now()); 
++ }
++ 
++@@ -55,7 +59,7 @@
++   return tm.Hour;  
++ }
++ 
++-int hourFormat12() { // the hour now in 12 hour format
+++int hourFormat12Now() { // the hour now in 12 hour format
++   return hourFormat12(now()); 
++ }
++ 
++@@ -69,7 +73,7 @@
++     return tm.Hour ;
++ }
++ 
++-uint8_t isAM() { // returns true if time now is AM
+++uint8_t isAMNow() { // returns true if time now is AM
++   return !isPM(now()); 
++ }
++ 
++@@ -77,7 +81,7 @@
++   return !isPM(t);  
++ }
++ 
++-uint8_t isPM() { // returns true if PM
+++uint8_t isPMNow() { // returns true if PM
++   return isPM(now()); 
++ }
++ 
++@@ -85,7 +89,7 @@
++   return (hour(t) >= 12); 
++ }
++ 
++-int minute() {
+++int minuteNow() {
++   return minute(now()); 
++ }
++ 
++@@ -94,7 +98,7 @@
++   return tm.Minute;  
++ }
++ 
++-int second() {
+++int secondNow() {
++   return second(now()); 
++ }
++ 
++@@ -103,7 +107,7 @@
++   return tm.Second;
++ }
++ 
++-int day(){
+++int dayNow(){
++   return(day(now())); 
++ }
++ 
++@@ -112,7 +116,7 @@
++   return tm.Day;
++ }
++ 
++-int weekday() {   // Sunday is day 1
+++int weekdayNow() {   // Sunday is day 1
++   return  weekday(now()); 
++ }
++ 
++@@ -121,7 +125,7 @@
++   return tm.Wday;
++ }
++    
++-int month(){
+++int monthNow(){
++   return month(now()); 
++ }
++ 
++@@ -130,7 +134,7 @@
++   return tm.Month;
++ }
++ 
++-int year() {  // as in Processing, the full four digit year: (2009, 2010 etc) 
+++int yearNow() {  // as in Processing, the full four digit year: (2009, 2010 etc) 
++   return year(now()); 
++ }
++ 
++@@ -147,7 +151,7 @@
++ #define LEAP_YEAR(Y)     ( ((1970+(Y))>0) && !((1970+(Y))%4) && ( ((1970+(Y))%100) || !((1970+(Y))%400) ) )
++ 
++ static  const uint8_t monthDays[]={31,28,31,30,31,30,31,31,30,31,30,31}; // API starts months from 1, this array starts from 0
++- 
+++#ifdef __cplusplus 
++ void breakTime(time_t timeInput, tmElements_t &tm){
++ // break the given time_t into time components
++ // this is a more compact version of the C library localtime function
++@@ -200,7 +204,61 @@
++   tm.Month = month + 1;  // jan is month 1  
++   tm.Day = time + 1;     // day of month
++ }
+++#else
+++void breakTime(time_t timeInput, tmElements_t *tm){
+++// break the given time_t into time components
+++// this is a more compact version of the C library localtime function
+++// note that year is offset from 1970 !!!
++ 
+++  uint8_t year;
+++  uint8_t month, monthLength;
+++  uint32_t time;
+++  unsigned long days;
+++
+++  time = (uint32_t)timeInput;
+++  tm->Second = time % 60;
+++  time /= 60; // now it is minutes
+++  tm->Minute = time % 60;
+++  time /= 60; // now it is hours
+++  tm->Hour = time % 24;
+++  time /= 24; // now it is days
+++  tm->Wday = ((time + 4) % 7) + 1;  // Sunday is day 1 
+++  
+++  year = 0;  
+++  days = 0;
+++  while((unsigned)(days += (LEAP_YEAR(year) ? 366 : 365)) <= time) {
+++    year++;
+++  }
+++  tm->Year = year; // year is offset from 1970 
+++  
+++  days -= LEAP_YEAR(year) ? 366 : 365;
+++  time  -= days; // now it is days in this year, starting at 0
+++  
+++  days=0;
+++  month=0;
+++  monthLength=0;
+++  for (month=0; month<12; month++) {
+++    if (month==1) { // february
+++      if (LEAP_YEAR(year)) {
+++        monthLength=29;
+++      } else {
+++        monthLength=28;
+++      }
+++    } else {
+++      monthLength = monthDays[month];
+++    }
+++    
+++    if (time >= monthLength) {
+++      time -= monthLength;
+++    } else {
+++        break;
+++    }
+++  }
+++  tm->Month = month + 1;  // jan is month 1  
+++  tm->Day = time + 1;     // day of month
+++}
+++#endif
+++#ifdef __cplusplus 
++ time_t makeTime(const tmElements_t &tm){   
++ // assemble time elements into time_t 
++ // note year argument is offset from 1970 (see macros in time.h to convert to other formats)
++@@ -231,6 +289,38 @@
++   seconds+= tm.Second;
++   return (time_t)seconds; 
++ }
+++#else 
+++time_t makeTime(const tmElements_t *tm){   
+++// assemble time elements into time_t 
+++// note year argument is offset from 1970 (see macros in time.h to convert to other formats)
+++// previous version used full four digit year (or digits since 2000),i.e. 2009 was 2009 or 9
+++  
+++  int i;
+++  uint32_t seconds;
+++
+++  // seconds from 1970 till 1 jan 00:00:00 of the given year
+++  seconds= tm->Year*(SECS_PER_DAY * 365);
+++  for (i = 0; i < tm->Year; i++) {
+++    if (LEAP_YEAR(i)) {
+++      seconds +=  SECS_PER_DAY;   // add extra days for leap years
+++    }
+++  }
+++  
+++  // add days for this year, months start from 1
+++  for (i = 1; i < tm->Month; i++) {
+++    if ( (i == 2) && LEAP_YEAR(tm->Year)) { 
+++      seconds += SECS_PER_DAY * 29;
+++    } else {
+++      seconds += SECS_PER_DAY * monthDays[i-1];  //monthDay array starts from 0
+++    }
+++  }
+++  seconds+= (tm->Day-1) * SECS_PER_DAY;
+++  seconds+= tm->Hour * SECS_PER_HOUR;
+++  seconds+= tm->Minute * SECS_PER_MIN;
+++  seconds+= tm->Second;
+++  return (time_t)seconds; 
+++}
+++#endif
++ /*=====================================================*/	
++ /* Low level system time functions  */
++ 
++@@ -252,6 +342,8 @@
++   while (millis() - prevMillis >= 1000) {
++ 		// millis() and prevMillis are both unsigned ints thus the subtraction will always be the absolute value of the difference
++     sysTime++;
+++    //Serial.print("System Time: ");
+++    //Serial.println(sysTime); /* 1 system time =  1000ms*/
++     prevMillis += 1000;	
++ #ifdef TIME_DRIFT_INFO
++     sysUnsyncedTime++; // this can be compared to the synced time to measure long term drift     
++@@ -282,7 +374,7 @@
++   Status = timeSet;
++   prevMillis = millis();  // restart counting from now (thanks to Korman for this fix)
++ } 
++-
+++#ifdef __cplusplus
++ void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
++  // year can be given as full four digit year or two digts (2010 or 10 for 2010);  
++  //it is converted to years since 1970
++@@ -298,7 +390,7 @@
++   tm.Second = sec;
++   setTime(makeTime(tm));
++ }
++-
+++#endif
++ void adjustTime(long adjustment) {
++   sysTime += adjustment;
++ }
++diff -ru a/Time/TimeLib.h b/Time/TimeLib.h
++--- a/Time/TimeLib.h	2019-01-30 17:11:53.978520590 +0000
+++++ b/Time/TimeLib.h	2019-01-08 13:36:13.000000000 +0000
++@@ -8,7 +8,6 @@
++ */     
++ 
++ #ifndef _Time_h
++-#ifdef __cplusplus
++ #define _Time_h
++ 
++ #include <inttypes.h>
++@@ -30,7 +29,9 @@
++ // and unpredictable effects by conflicting with the C library header "time.h",
++ // but at least this hack lets us define C++ functions as intended.  Hopefully
++ // nothing too terrible will result from overriding the C library header?!
++-extern "C++" {
+++#ifdef __cplusplus
+++extern "C" {
+++#endif
++ typedef enum {timeNotSet, timeNeedsSync, timeSet
++ }  timeStatus_t ;
++ 
++@@ -96,30 +97,30 @@
++ 
++ /*============================================================================*/
++ /*  time and date functions   */
++-int     hour();            // the hour now 
+++int     hourNow();            // the hour now 
++ int     hour(time_t t);    // the hour for the given time
++-int     hourFormat12();    // the hour now in 12 hour format
+++int     hourFormat12Now();    // the hour now in 12 hour format
++ int     hourFormat12(time_t t); // the hour for the given time in 12 hour format
++-uint8_t isAM();            // returns true if time now is AM
+++uint8_t isAMNow();            // returns true if time now is AM
++ uint8_t isAM(time_t t);    // returns true the given time is AM
++-uint8_t isPM();            // returns true if time now is PM
+++uint8_t isPMNow();            // returns true if time now is PM
++ uint8_t isPM(time_t t);    // returns true the given time is PM
++-int     minute();          // the minute now 
+++int     minuteNow();          // the minute now 
++ int     minute(time_t t);  // the minute for the given time
++-int     second();          // the second now 
+++int     secondNow();          // the second now 
++ int     second(time_t t);  // the second for the given time
++-int     day();             // the day now 
+++int     dayNow();             // the day now 
++ int     day(time_t t);     // the day for the given time
++-int     weekday();         // the weekday now (Sunday is day 1) 
+++int     weekdayNow();         // the weekday now (Sunday is day 1) 
++ int     weekday(time_t t); // the weekday for the given time 
++-int     month();           // the month now  (Jan is month 1)
+++int     monthNow();           // the month now  (Jan is month 1)
++ int     month(time_t t);   // the month for the given time
++-int     year();            // the full four digit year: (2009, 2010 etc) 
+++int     yearNow();            // the full four digit year: (2009, 2010 etc) 
++ int     year(time_t t);    // the year for the given time
++ 
++ time_t now();              // return the current time as seconds since Jan 1 1970 
++ void    setTime(time_t t);
++-void    setTime(int hr,int min,int sec,int day, int month, int yr);
+++void    setTimeParams(int hr,int min,int sec,int day, int month, int yr);
++ void    adjustTime(long adjustment);
++ 
++ /* date strings */ 
++@@ -134,11 +135,16 @@
++ void    setSyncProvider( getExternalTime getTimeFunction); // identify the external time provider
++ void    setSyncInterval(time_t interval); // set the number of seconds between re-sync
++ 
+++#ifdef __cplusplus
++ /* low level functions to convert to and from system time                     */
++ void breakTime(time_t time, tmElements_t &tm);  // break time_t into elements
++ time_t makeTime(const tmElements_t &tm);  // convert time elements into time_t
++-
+++#else
+++void breakTime(time_t time, tmElements_t *tm);  // break time_t into elements
+++time_t makeTime(const tmElements_t *tm);  // convert time elements into time_t
+++#endif
+++#ifdef __cplusplus
++ } // extern "C++"
++-#endif // __cplusplus
+++#endif
++ #endif /* _Time_h */
++ 
+diff --git a/port/arduino/patches/arduino-mk.patch b/port/arduino/patches/arduino-mk.patch
+new file mode 100644
+index 00000000..a55ffed5
+--- /dev/null
++++ b/port/arduino/patches/arduino-mk.patch
+@@ -0,0 +1,11 @@
++--- a/Arduino-Makefile/Arduino.mk	2019-04-11 15:28:21.579786532 +0200
+++++ b/Arduino-Makefile/Arduino.mk	2019-04-11 15:09:39.302742785 +0200
++@@ -889,7 +889,7 @@
++ LOCAL_OBJ_FILES = $(LOCAL_C_SRCS:.c=.c.o)   $(LOCAL_CPP_SRCS:.cpp=.cpp.o) \
++ 		$(LOCAL_CC_SRCS:.cc=.cc.o)   $(LOCAL_PDE_SRCS:.pde=.pde.o) \
++ 		$(LOCAL_INO_SRCS:.ino=.ino.o) $(LOCAL_AS_SRCS:.S=.S.o)
++-LOCAL_OBJS      = $(patsubst %,$(OBJDIR)/%,$(LOCAL_OBJ_FILES))
+++LOCAL_OBJS      = $(patsubst %,$(OBJDIR)/%,$(notdir $(LOCAL_OBJ_FILES)))
++ 
++ ifeq ($(words $(LOCAL_SRCS)), 0)
++     $(error At least one source file (*.ino, *.pde, *.cpp, *c, *cc, *.S) is needed)
+diff --git a/port/arduino/patches/iotivity_lite.patch b/port/arduino/patches/iotivity_lite.patch
+new file mode 100644
+index 00000000..764a5536
+--- /dev/null
++++ b/port/arduino/patches/iotivity_lite.patch
+@@ -0,0 +1,122 @@
++--- a/port/oc_log.h	2019-04-15 21:50:39.653682500 +0200
+++++ b/port/oc_log.h	2019-04-17 13:48:31.186941913 +0200
++@@ -13,9 +13,7 @@
++ // See the License for the specific language governing permissions and
++ // limitations under the License.
++ */
++-/**
++-  @file
++-*/
+++
++ #ifndef OC_LOG_H
++ #define OC_LOG_H
++ 
++@@ -25,13 +23,22 @@
++ extern "C"
++ {
++ #endif
++-
++-#define PRINT(...) printf(__VA_ARGS__)
+++#ifdef ARDUINO
+++#include "Arduino.h"
+++#include "serial.h"
+++#if defined(__AVR__)
+++#define PRINT(format, ...)  AVR_LOG(format, ##__VA_ARGS__)
+++#else
+++#define PRINT(format, ...)  ARM_LOG(format, ##__VA_ARGS__)  
+++#endif
+++#else
+++#define PRINT(...) printf(__VA_ARGS__) 
+++#endif
++ 
++ #define PRINTipaddr(endpoint)                                                  \
++   do {                                                                         \
++     if ((endpoint).flags & IPV4) {                                             \
++-      PRINT("[%d.%d.%d.%d]:%d", ((endpoint).addr.ipv4.address)[0],             \
+++      PRINT("[%d.%d.%d.%d]:%u", ((endpoint).addr.ipv4.address)[0],             \
++             ((endpoint).addr.ipv4.address)[1],                                 \
++             ((endpoint).addr.ipv4.address)[2],                                 \
++             ((endpoint).addr.ipv4.address)[3], (endpoint).addr.ipv4.port);     \
++@@ -39,7 +46,7 @@
++       PRINT(                                                                   \
++         "[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%"    \
++         "02x%"                                                                 \
++-        "02x]:%d",                                                             \
+++        "02x]:%u",                                                             \
++         ((endpoint).addr.ipv6.address)[0], ((endpoint).addr.ipv6.address)[1],  \
++         ((endpoint).addr.ipv6.address)[2], ((endpoint).addr.ipv6.address)[3],  \
++         ((endpoint).addr.ipv6.address)[4], ((endpoint).addr.ipv6.address)[5],  \
++@@ -54,7 +61,32 @@
++     }                                                                          \
++   } while (0)
++ 
++-#ifdef OC_DEBUG
+++
+++#ifdef ARDUINO
+++#define OC_LOG(level, format, ...)                                            \
+++  do {                                                                        \
+++      PRINT(level ": " __FILE__ "<%s:%d> ", __func__, __LINE__);           \
+++      PRINT(format, ##__VA_ARGS__);                                           \
+++      PRINT("\n");                                                          \
+++  } while (0)
+++#define OC_DBG(format, ...)   OC_LOG("DBG", format, ##__VA_ARGS__)
+++#define OC_WRN(format, ...)   OC_LOG("WRN", format,##__VA_ARGS__)
+++#define OC_ERR(format, ...)   OC_LOG("ERR", format, ##__VA_ARGS__)
+++#define OC_LOGipaddr(endpoint)                                                \
+++  do {                                                                        \
+++      PRINT("DBG: " __FILE__   "<%s:%d>: " , __func__, __LINE__);             \
+++      PRINTipaddr(endpoint);                                                  \
+++      PRINT("\r\n");                                                          \
+++  } while (0)
+++#define OC_LOGbytes(bytes, length)                                            \
+++  do {                                                                        \
+++			 PRINT("DBG: " __FILE__  "<%s:%d>: " , __func__, __LINE__);                   \
+++			 uint16_t i;                                                             \
+++      for (i = 0; i < length; i++)                                            \
+++        PRINT(" %02X", bytes[i]);                                             \
+++      PRINT("\r\n");                                                          \
+++  } while (0)
+++#else /* ! ARDUINO */
++ #define OC_LOG(level, ...)                                                     \
++   do {                                                                         \
++     PRINT("%s: %s <%s:%d>: ", level, __FILE__, __func__, __LINE__);            \
++@@ -78,13 +110,6 @@
++       PRINT(" %02X", bytes[i]);                                                \
++     PRINT("\n");                                                               \
++   } while (0)
++-#else
++-#define OC_LOG(...)
++-#define OC_DBG(...)
++-#define OC_WRN(...)
++-#define OC_ERR(...)
++-#define OC_LOGipaddr(endpoint)
++-#define OC_LOGbytes(bytes, length)
++ #endif
++ 
++ #ifdef __cplusplus
++--- a/security/oc_store.c	2019-04-15 21:50:39.665683094 +0200
+++++ b/security/oc_store.c	2019-04-17 12:07:36.003254426 +0200
++@@ -36,7 +36,7 @@
++ gen_svr_tag(const char *name, size_t device_index, char *svr_tag)
++ {
++   int svr_tag_len =
++-    snprintf(svr_tag, SVR_TAG_MAX, "%s_%zd", name, device_index);
+++    snprintf(svr_tag, SVR_TAG_MAX, "%s_%d", name, device_index);
++   svr_tag_len =
++     (svr_tag_len < SVR_TAG_MAX - 1) ? svr_tag_len + 1 : SVR_TAG_MAX - 1;
++   svr_tag[svr_tag_len] = '\0';--- security/oc_doxm.c	2019-04-21 14:03:46.955490801 +0200
++--- a/security/oc_doxm.c	2019-04-21 14:34:51.869274891 +0200
+++++ b/security/oc_doxm.c	2019-04-21 14:34:51.869274891 +0200
++@@ -24,10 +24,11 @@
++ #include "oc_store.h"
++ #include <stddef.h>
++ #include <string.h>
+++#ifndef ARDUINO
++ #ifndef _WIN32
++ #include <strings.h>
++ #endif
++-
+++#endif
++ #ifdef OC_DYNAMIC_ALLOCATION
++ #include "port/oc_assert.h"
++ #include <stdlib.h>
+diff --git a/port/arduino/patches/mbedtls_arduino.patch b/port/arduino/patches/mbedtls_arduino.patch
+new file mode 100644
+index 00000000..dd6f1ed7
+--- /dev/null
++++ b/port/arduino/patches/mbedtls_arduino.patch
+@@ -0,0 +1,38 @@
++--- a/include/mbedtls/config.h	2019-04-17 14:43:41.986008170 +0200
+++++ b/include/mbedtls/config.h	2019-04-17 14:56:46.861187063 +0200
++@@ -50,6 +50,15 @@
++ #define MBEDTLS_SSL_DTLS_ANTI_REPLAY
++ #define MBEDTLS_SSL_DTLS_HELLO_VERIFY
++ 
+++/* Save RAM at the expense of speed, see ecp.h */
+++#define MBEDTLS_ECP_WINDOW_SIZE        2
+++#define MBEDTLS_ECP_FIXED_POINT_OPTIM  0
+++
+++/* Save RAM by adjusting to our exact needs */
+++#define MBEDTLS_ECP_MAX_BITS 384
+++#define MBEDTLS_MPI_MAX_SIZE    48 // 384 bits is 48 bytes
+++/* Significant speed benefit at the expense of some ROM */
+++#define MBEDTLS_ECP_NIST_OPTIM
++ 
++ /* mbed TLS modules */
++ #define MBEDTLS_AES_C
++@@ -62,6 +71,7 @@
++ #define MBEDTLS_SSL_CLI_C
++ #define MBEDTLS_SSL_SRV_C
++ #define MBEDTLS_SSL_TLS_C
+++#define MBEDTLS_SSL_KEEP_PEER_CERTIFICATE 0
++ 
++ /* Save RAM at the expense of ROM */
++ #define MBEDTLS_AES_ROM_TABLES
++@@ -69,6 +79,11 @@
++ /* Save some RAM by adjusting to your exact needs */
++ #define MBEDTLS_PSK_MAX_LEN    16 /* 128-bits keys are generally enough */
++ 
+++/* Save ROM and a few bytes of RAM by specifying our own ciphersuite list */
+++#define MBEDTLS_SSL_CIPHERSUITES                        \
+++    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,    \
+++    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+++    
++ /*
++  * You should adjust this to the exact number of sources you're using: default
++  * is the "platform_entropy_poll" source, but you may want to add other ones
+diff --git a/port/arduino/patches/samd_random.patch b/port/arduino/patches/samd_random.patch
+new file mode 100644
+index 00000000..adc04480
+--- /dev/null
++++ b/port/arduino/patches/samd_random.patch
+@@ -0,0 +1,22 @@
++--- a/arduino/WMath.h	2019-04-17 17:45:06.369842980 +0200
+++++ b/arduino/WMath.h	2019-04-15 22:11:32.803694644 +0200
++@@ -20,14 +20,14 @@
++ #define _WIRING_MATH_
++ 
++ extern long random( long ) ;
++-extern long random( long, long ) ;
++ extern void randomSeed( uint32_t dwSeed ) ;
++ extern long map( long, long, long, long, long ) ;
++-
+++#ifdef __cplusplus
++ extern uint16_t makeWord( uint16_t w ) ;
++ extern uint16_t makeWord( uint8_t h, uint8_t l ) ;
++-
+++extern long random( long, long ) ;
+++#endif
++ #define word(...) makeWord(__VA_ARGS__)
++ 
++ 
++-#endif /* _WIRING_MATH_ */
++\ No newline at end of file
+++#endif /* _WIRING_MATH_ */
+diff --git a/port/arduino/sam.mk b/port/arduino/sam.mk
+new file mode 100644
+index 00000000..8d5c4c2d
+--- /dev/null
++++ b/port/arduino/sam.mk
+@@ -0,0 +1,31 @@
++### BOARD_TAG
++### It must be set to the board you are currently using. (i.e uno, mega2560, etc.)
++BOARD_TAG   = arduino_due_x
++
++### Variant Frequency
++F_CPU		= 84000000L
++### Board Chip
++MCU?=cortex-m3
++
++### MCU ARCH
++ARCHITECTURE = sam
++
++#MCU VAriant
++VARIANT	= arduino_due_x
++
++
++### MONITOR_PORT
++### The port your board is connected to. Using an '*' tries all the ports and finds the right one.
++#MONITOR_PORT   = /dev/ttyUSB*
++MONITOR_PORT      = /dev/ttyACM*
++
++# Define Arduino support package installation path where SAM device support has been installed
++# Linux
++ARDUINO_PACKAGE_DIR := $(HOME)/.arduino15/packages
++
++
++include $(ARDMK_DIR)/Sam.mk
++
++### CURRENT_DIR
++### Do not touch - used for binaries path
++CURRENT_DIR       = $(shell basename $(CURDIR))
+diff --git a/port/arduino/samd.mk b/port/arduino/samd.mk
+new file mode 100644
+index 00000000..e9a63c74
+--- /dev/null
++++ b/port/arduino/samd.mk
+@@ -0,0 +1,30 @@
++### BOARD_TAG
++### It must be set to the board you are currently using. (i.e uno, mega2560, etc.)
++BOARD_TAG   = mkrzero
++
++### Variant Frequency
++F_CPU		= 48000000L
++### Board Chip
++MCU?=cortex-m0plus
++
++### MCU ARCH
++ARCHITECTURE=samd
++
++#MCU VAriant
++VARIANT			= mkrzero
++
++### MONITOR_PORT
++### The port your board is connected to. Using an '*' tries all the ports and finds the right one.
++#MONITOR_PORT   = /dev/ttyUSB*
++MONITOR_PORT    = /dev/ttyACM*
++
++# Define Arduino support package installation path where SAM device support has been installed
++# Linux
++ARDUINO_PACKAGE_DIR := $(HOME)/.arduino15/packages
++
++
++include $(ARDMK_DIR)/Sam.mk
++
++### CURRENT_DIR
++### Do not touch - used for binaries path
++CURRENT_DIR       = $(shell basename $(CURDIR))
+diff --git a/port/arduino/setup.mk b/port/arduino/setup.mk
+new file mode 100644
+index 00000000..32d5b4a8
+--- /dev/null
++++ b/port/arduino/setup.mk
+@@ -0,0 +1,42 @@
++### PROJECT_DIR 
++### This is the path to where you have created/cloned your project
++PROJECT_DIR       = $(PWD)
++### ARDMK_DIR
++### Path to the Arduino-Makefile directory.
++ARDMK_DIR         = $(PROJECT_DIR)/Arduino-Makefile
++
++### ARDUINO_DIR
++### Path to the Arduino application and resources directory.
++ARDUINO_DIR       = $(HOME)/arduino-home
++
++### AVRDUDE
++AVRDUDE_ARD_PROGRAMMER = wiring
++
++### ARDUINO LIBS
++ifeq ($(ARCH),avr)
++	ARDUINO_LIBS +=  Wire SPI Time pRNG Ethernet2 SdFat
++else 
++	ARDUINO_LIBS +=  Wire SPI Time Ethernet2 SdFat 
++endif
++
++### CFLAGS_STD
++### Set the C standard to be used during compilation.
++CFLAGS_STD        = -std=gnu11
++
++### CXXFLAGS_STD
++### Set the C++ standard to be used during compilation.
++CXXFLAGS_STD      += -std=gnu++11 
++
++### CXXFLAGS
++### Flags you might want to set for debugging purpose. Comment to stop.#-pedantic
++### from https://stackoverflow.com/questions/35586426/gcc-compiler-warning-flag-for-zero-variadic-macro-arguments
++### -Wpedantic: emove warning: ISO C++11 requires at least one argument for the "..." in a variadic macro
++### -Wvariadic-macros: warning: anonymous variadic macros were introduced in C++11
++CXXFLAGS         += -Wno-attributes -Wno-variadic-macros -Wall -Wextra
++### CFLAGS
++CFLAGS           += -Wno-attributes -Wno-variadic-macros -Wall -Wextra
++
++
++### CURRENT_DIR
++### Do not touch - used for binaries path
++CURRENT_DIR       = $(shell basename $(CURDIR))
+-- 
+2.16.1.windows.1
+

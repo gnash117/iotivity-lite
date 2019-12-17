@@ -1,0 +1,67 @@
+From 8500f90a7d19e5dc8d090b29df51d0609d59951c Mon Sep 17 00:00:00 2001
+From: Jozef Kralik <jozef.kralik@kistler.com>
+Date: Tue, 17 Dec 2019 14:58:29 +0100
+Subject: [PATCH] Fix: set cloud_ep_state to DISCONNECTED
+
+When cloud_ep is reset and cloud_ep_state is still set
+as CONNECTED a it cause issue - cloud is not able to
+reconnect because there is condition at cloud_ep_state.
+
+Signed-off-by: Jozef Kralik <jozef.kralik@kistler.com>
+Change-Id: Ic40333c338fefba9dcaaf71c0da33d90df3dace5
+---
+ api/cloud/oc_cloud.c         | 4 ++++
+ api/cloud/oc_cloud_manager.c | 1 +
+ 2 files changed, 5 insertions(+)
+
+diff --git a/api/cloud/oc_cloud.c b/api/cloud/oc_cloud.c
+index 0a4667f..509d1e2 100644
+--- a/api/cloud/oc_cloud.c
++++ b/api/cloud/oc_cloud.c
+@@ -109,6 +109,7 @@ cloud_deregister_on_reset_internal(oc_cloud_context_t *ctx,
+   (void)data;
+   cloud_close_endpoint(ctx->cloud_ep);
+   memset(ctx->cloud_ep, 0, sizeof(oc_endpoint_t));
++  ctx->cloud_ep_state = OC_SESSION_DISCONNECTED;
+   cloud_store_initialize(&ctx->store);
+   cloud_manager_stop(ctx);
+   ctx->last_error = 0;
+@@ -152,6 +153,7 @@ oc_cloud_provision_conf_resource(oc_cloud_context_t *ctx, const char *server,
+ 
+   cloud_close_endpoint(ctx->cloud_ep);
+   memset(ctx->cloud_ep, 0, sizeof(oc_endpoint_t));
++  ctx->cloud_ep_state = OC_SESSION_DISCONNECTED;
+   cloud_store_initialize(&ctx->store);
+   cloud_manager_stop(ctx);
+ 
+@@ -183,6 +185,7 @@ cloud_update_by_resource(oc_cloud_context_t *ctx,
+ {
+   cloud_close_endpoint(ctx->cloud_ep);
+   memset(ctx->cloud_ep, 0, sizeof(oc_endpoint_t));
++  ctx->cloud_ep_state = OC_SESSION_DISCONNECTED;
+   cloud_store_initialize(&ctx->store);
+   cloud_manager_stop(ctx);
+   if (data->auth_provider && data->auth_provider_len) {
+@@ -311,6 +314,7 @@ oc_cloud_manager_stop(oc_cloud_context_t *ctx)
+   cloud_store_initialize(&ctx->store);
+   cloud_close_endpoint(ctx->cloud_ep);
+   memset(ctx->cloud_ep, 0, sizeof(oc_endpoint_t));
++  ctx->cloud_ep_state = OC_SESSION_DISCONNECTED;
+   ctx->cloud_manager = false;
+   return 0;
+ }
+diff --git a/api/cloud/oc_cloud_manager.c b/api/cloud/oc_cloud_manager.c
+index 3278c22..3919e8d 100644
+--- a/api/cloud/oc_cloud_manager.c
++++ b/api/cloud/oc_cloud_manager.c
+@@ -163,6 +163,7 @@ _register_handler(oc_cloud_context_t *ctx, oc_client_response_t *data)
+         strcmp(ci_server, value)) {
+       cloud_close_endpoint(ctx->cloud_ep);
+       memset(ctx->cloud_ep, 0, sizeof(oc_endpoint_t));
++      ctx->cloud_ep_state = OC_SESSION_DISCONNECTED;
+     }
+     cloud_set_string(&ctx->store.ci_server, value, size);
+   }
+-- 
+2.16.1.windows.1
+

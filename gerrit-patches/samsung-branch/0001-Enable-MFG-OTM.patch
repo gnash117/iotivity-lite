@@ -1,0 +1,473 @@
+From 3339874adf52212d61433861611e8aff73ea956e Mon Sep 17 00:00:00 2001
+From: Oleksii Beketov <ol.beketov@samsung.com>
+Date: Thu, 21 Mar 2019 18:44:03 +0200
+Subject: [PATCH] Enable MFG OTM
+
+OC_MFG flag enables reading and writing the MFG
+certificates from and to the storage and MFG
+sample server build
+
+Change-Id: Ib88f33984d2a02c518eaba1e03f7a45a6e183265
+Signed-off-by: Oleksii Beketov <ol.beketov@samsung.com>
+---
+ apps/mfgserver_acl   |   1 +
+ apps/mfgserver_cred  | Bin 2676 -> 2685 bytes
+ apps/mfgserver_pstat | Bin 0 -> 123 bytes
+ apps/rpk_server.c    |   4 +-
+ port/linux/Makefile  |  13 ++++-
+ security/oc_cred.c   |  95 ++++++++++++++++++----------------
+ security/oc_tls.c    | 140 ++++++++++++++++++++++++++++++---------------------
+ 7 files changed, 151 insertions(+), 102 deletions(-)
+ create mode 100644 apps/mfgserver_acl
+ create mode 100644 apps/mfgserver_pstat
+
+diff --git a/apps/mfgserver_acl b/apps/mfgserver_acl
+new file mode 100644
+index 00000000..e1e5e8a3
+--- /dev/null
++++ b/apps/mfgserver_acl
+@@ -0,0 +1 @@
++¿brtŸioic.r.aclÿbifŸooic.if.baselineÿfaclist¿dacesŸ¿hconntypejanon-cleariresourcesŸ¿bifŸhoic.if.rooic.if.baselineÿbrtŸhoic.wk.pÿdhreff/oic/pÿ¿bifŸioic.if.llooic.if.baselineÿbrtŸjoic.wk.resÿdhrefh/oic/resÿ¿bifŸioic.if.rwooic.if.baselineÿbrtŸjoic.wk.conÿdhrefg/oc/conÿ¿bifŸhoic.if.rooic.if.baselineÿbrtŸtoic.wk.introspectionÿdhreft/oc/wk/introspectionÿ¿bifŸooic.if.baselineÿbrtŸvoic.introspection.dataÿdhrefq/oc/introspectionÿ¿bifŸhoic.if.rooic.if.baselineÿbrtŸkoic.d.lighthoic.wk.dÿdhreff/oic/dÿÿjpermissioneaceidÿ¿hconntypejanon-cleariresourcesŸ¿bifŸooic.if.baselineÿbrtŸjoic.r.doxmÿdhrefm/oic/sec/doxmÿ¿bifŸooic.if.baselineÿbrtŸkoic.r.pstatÿdhrefn/oic/sec/pstatÿ¿bifŸooic.if.baselineÿbrtŸioic.r.aclÿdhrefl/oic/sec/aclÿ¿bifŸooic.if.baselineÿbrtŸjoic.r.credÿdhrefm/oic/sec/credÿÿjpermissioneaceidÿÿÿjrowneruuidx$00000000-0000-0000-0000-000000000000ÿ
+\ No newline at end of file
+diff --git a/apps/mfgserver_cred b/apps/mfgserver_cred
+index 3e938456c87ff774ad83fa03742ce1161d3ef1ec..7267ed7552fdae213f9ba1c85e6c1862bfe7e686 100644
+GIT binary patch
+delta 493
+zcmew&@>gU+oytXnCZ@AMT(p3hiIIs(#KkqtIKaTr(A31-)Wpop($K)vbmF23^_Czp
+zLjwa7Q^P26UPDU*V?#42*PwB$VWvSk8*?ZNGf#p`YFTPdenD!H0+5xNoT?Dw8XRJ!
+z;8c{Kn39v3m#v^-Xl#^dVrH4Bo0O86qHAKDXrOCpoR*|(nPO&Xnr2{Zkz|;xsb5@K
+zT#}lbR<2i)T3lkx=8&G7n3*$q1EV~jTY0&rp^SkP$U-ij$&4IIlm9bHIe0%bmzDTk
+zFJrp9!L6x0?b#`2A>r9w$KA9otnNMydDXSIY<Egd<()%^inR0en{IiR@lFvJv^9-f
+zmAx`(+QYpMCr2_Z^YUacaAQ(rXbKcwJ^!n|)~z!$W(u`<Y(7=;t>Rha%_r*5{}!fw
+zTVn=PvNQPYjWsc+wq13v&d^VuURR=bcafywf=WTPb@D4*kM5eRz%D;IjoGq3DX`>k
+zpM5>+!`q<~HC9c2$U1{@O2Kk#rQRsT`OAK#d|1H6#-Y{ban6>Rk$s^Hvl9agr9N4j
+VmRyvYl9|GkU0j;9S&k))4FG#txa$A_
+
+delta 465
+zcmew>@<n7qoyrM=CZ;1moV|dViIIs(#KkqtIKaTr(A3D>(A3h%(9p!dVB(?)^%e%E
+zMka;^rpCsGQR2LY76#@<#!#+7<2u76g9J9_P!?vMNSD;I)SUc+)FK5SD>FG&A;dK}
+z#7dz!F}ENmRYAib(IUkpCDByZC^<Dz*Cg4@T-U<TBw07r$UG^@)X37@!Z<}!zf7+v
+zvnsDL+X1MpxHK<aZ}JXCIcDebipe(_-5rjuE93|emC&BibkfUWtBl*3?@{wUPdaFO
+zOJ+f0Mh<IF7}G}k1HEi7qZH<TGKzeCbi(Xak0Vyw|J_*kX!=71!I_g2n3j3CGZ?rq
+zDG1cPFpYFsYpdwLd3W(fRoBLFaof51FI4Bfw^^`w+a)O`1=pKJ-(`=5`7o#1On&1$
+z^RAC!r*!M`N1qGc{XFEk{i*Nd0OpALE|0aF%sKmmPX0W`Y4%OsH@;%On_e(~PIQdZ
+x>WG=%2@AN`IJDY4&e<|EvM+RDc4A<m)DKJ3l8aJPGE<nci%XL>tFwf$0RSb0vXB4(
+
+diff --git a/apps/mfgserver_pstat b/apps/mfgserver_pstat
+new file mode 100644
+index 0000000000000000000000000000000000000000..10214483ba16280892c16444f3f7bcdacd9062c3
+GIT binary patch
+literal 123
+zcmZ9BOAde_3<doi#jV6EQNW}sl(ZPVjYsiP>@g;~@hxVOc^7ax7eb?0MM*jp!0DtX
+w;G{r{TQRs|EXk!~)>0QRzJcT`Am4)c&Z1DvGt(X%ZyVa9AKwj+fB3#~11U}{OaK4?
+
+literal 0
+HcmV?d00001
+
+diff --git a/apps/rpk_server.c b/apps/rpk_server.c
+index efa75b12..a3371c84 100644
+--- a/apps/rpk_server.c
++++ b/apps/rpk_server.c
+@@ -203,9 +203,9 @@ main(void)
+ 
+ #ifdef OC_SECURITY
+ #ifdef OC_MFG
+-  oc_storage_config("./mfgserver_creds");
++  oc_storage_config("./mfg_server_creds");
+ #elif defined(OC_RPK)
+-  oc_storage_config("./rpkserver_creds");
++  oc_storage_config("./rpk_server_creds");
+ #else
+   oc_storage_config("./simpleserver_creds");
+ #endif
+diff --git a/port/linux/Makefile b/port/linux/Makefile
+index 4f680581..7ce7407a 100644
+--- a/port/linux/Makefile
++++ b/port/linux/Makefile
+@@ -147,6 +147,10 @@ SAMPLES = server simpleserver \
+ 
+ ifneq ($(CODE_SIZE_OPT),1)
+ SAMPLES += server_block_linux client simpleclient temp_sensor cloud_linux client_collections_linux client_block_linux multi_device_client smart_lock client_multithread_linux server_multithread_linux
++ifeq ($(MFG),1)
++CFLAGS += -DOC_MFG
++SAMPLES += mfg_server
++endif
+ endif
+ 
+ ifeq ($(EASYSETUP),1)
+@@ -528,9 +532,16 @@ simpleclient: libiotivity-constrained-client.a $(ROOT_DIR)/apps/simpleclient.c
+ 	@mkdir -p $@_creds
+ 	${CC} -o $@ ../../apps/simpleclient.c libiotivity-constrained-client.a -DOC_CLIENT ${CFLAGS}  ${LIBS}
+ 
++mfg_server: libiotivity-constrained-server.a $(ROOT_DIR)/apps/rpk_server.c
++	@mkdir -p $@_creds
++	@cp ../../apps/mfgserver_pstat $@_creds/pstat_0
++	@cp ../../apps/mfgserver_cred $@_creds/cred_0
++	@cp ../../apps/mfgserver_acl $@_creds/acl_0
++	${CC} -o $@ ../../apps/rpk_server.c libiotivity-constrained-server.a -DOC_SERVER -DOC_MFG ${CFLAGS}  ${LIBS}
++
+ rpk_server: libiotivity-constrained-server.a $(ROOT_DIR)/apps/rpk_server.c
+ 	@mkdir -p $@_creds
+-	${CC} -o $@ ../../apps/rpk_server.c libiotivity-constrained-server.a -DOC_SERVER -DOC_RPK ${CFLAGS}  ${LIBS}
++	${CC} -o $@ ../../apps/rpk_server.c libiotivity-constrained-server.a -DOC_SERVER -DOC_RPK ${CFLAGS} -UOC_MFG ${LIBS}
+ 
+ client_collections_linux: libiotivity-constrained-client.a $(ROOT_DIR)/apps/client_collections_linux.c
+ 	@mkdir -p $@_creds
+diff --git a/security/oc_cred.c b/security/oc_cred.c
+index 6f2c30f7..e1a59de3 100644
+--- a/security/oc_cred.c
++++ b/security/oc_cred.c
+@@ -213,14 +213,45 @@ oc_sec_encode_cred(bool persist, size_t device)
+       }
+       oc_rep_close_object(creds, roleid);
+     }
+-    oc_rep_set_object(creds, privatedata);
++#ifdef OC_MFG
+     if (persist) {
+-      oc_rep_set_byte_string(privatedata, data, cr->key, 16);
+-    } else {
+-      oc_rep_set_byte_string(privatedata, data, cr->key, 0);
++      for (int i = 0; i < cr->ownchainlen; i++) {
++        oc_rep_set_object(creds, publicdata);
++        oc_rep_set_text_string(publicdata, encoding, "oic.sec.encoding.der");
++        oc_rep_set_byte_string(publicdata, data, cr->mfgowncert[i], cr->mfgowncertlen[i]);
++        oc_rep_close_object(creds, publicdata);
++        oc_rep_set_text_string(creds, credusage, "oic.sec.cred.mfgcert");
++      }
++      if (cr->mfgkeylen != 0 && cr->mfgkey != NULL) {
++        oc_rep_set_object(creds, privatedata);
++        oc_rep_set_text_string(privatedata, encoding, "oic.sec.encoding.raw");
++        oc_rep_set_byte_string(privatedata, data, cr->mfgkey, cr->mfgkeylen);
++        oc_rep_close_object(creds, privatedata);
++      }
++      if (cr->mfgtrustcalen > 0) {
++        oc_rep_set_object(creds, publicdata);
++        oc_rep_set_text_string(publicdata, encoding, "oic.sec.encoding.der");
++        oc_rep_set_byte_string(publicdata, data, cr->mfgtrustca, cr->mfgtrustcalen);
++        oc_rep_close_object(creds, publicdata);
++        oc_rep_set_text_string(creds, credusage, "oic.sec.cred.mfgtrustca");
++      }
++    }
++#endif /* OC_MFG */
++    uint8_t t = 0, i = 0;
++    for (i = 0; i < 16; i++) {
++      t += cr->key[i];
++    }
++    if (t) {
++      oc_rep_set_object(creds, privatedata);
++      if (persist) {
++        oc_rep_set_byte_string(privatedata, data, cr->key, 16);
++      } else {
++        oc_rep_set_byte_string(privatedata, data, cr->key, 0);
++      }
++      oc_rep_set_text_string(privatedata, encoding, "oic.sec.encoding.raw");
++      oc_rep_close_object(creds, privatedata);
+     }
+-    oc_rep_set_text_string(privatedata, encoding, "oic.sec.encoding.raw");
+-    oc_rep_close_object(creds, privatedata);
++
+     oc_rep_object_array_end_item(creds);
+     cr = cr->next;
+   }
+@@ -336,7 +367,7 @@ oc_sec_decode_cred(oc_rep_t *rep, oc_sec_cred_t **owner, bool from_storage,
+                       goto next_item;
+                     if (size != 24) {
+                       OC_ERR("oc_cred: Invalid key(24)");
+-                      goto error_exit;
++                      return false;
+                     }
+                     got_key = true;
+                     memcpy(key, p, size);
+@@ -350,20 +381,16 @@ oc_sec_decode_cred(oc_rep_t *rep, oc_sec_cred_t **owner, bool from_storage,
+                   if (mfgcert_flag) {
+ #ifdef OC_DYNAMIC_ALLOCATION
+                     mfgkey = (uint8_t *)oc_mem_malloc(size * sizeof(uint8_t));
+-                    if (mfgkey == NULL) {
+-                      OC_ERR("memory alloc");
+-                      goto error_exit;
+-                    }
+-                    memcpy(mfgkey, p, size);
+-                    mfgkeylen = size;
+-                    mfgkey_flag = true;
+ #else
+                     oc_abort("alloc failed");
+ #endif
++                    memcpy(mfgkey, p, size);
++                    mfgkeylen = size;
++                    mfgkey_flag = true;
+                   } else {
+                     if (size != 16) {
+                       OC_ERR("oc_cred: Invalid key(16)");
+-                      goto error_exit;
++                      return false;
+                     }
+                     memcpy(key, p, 16);
+                     got_key = true;
+@@ -394,23 +421,18 @@ oc_sec_decode_cred(oc_rep_t *rep, oc_sec_cred_t **owner, bool from_storage,
+                        memcmp(oc_string(cred->name), "publicdata", 10) == 0) {
+               while (data != NULL) {
+                 len = oc_string_len(data->name);
+-                if ((len == 4) &&
+-                    memcmp(oc_string(data->name), "data", 4) == 0) {
+-#ifdef OC_DYNAMIC_ALLOCATION
++                if ((len == 4 ) && memcmp(oc_string(data->name), "data", 4) == 0) {
+                   uint8_t *p = oc_cast(data->value.string, uint8_t);
+                   int size = oc_string_len(data->value.string);
+                   if (size == 0)
+                     goto next_item;
++#ifdef OC_DYNAMIC_ALLOCATION
+                   cert = (uint8_t *)oc_mem_malloc(size * sizeof(uint8_t));
+-                  if (cert == NULL) {
+-                    OC_ERR("memory alloc");
+-                    goto error_exit;
+-                  }
+-                  memcpy(cert, p, size);
+-                  certlen = size;
+ #else
+                   oc_abort("alloc failed");
+ #endif
++                  memcpy(cert, p, size);
++                  certlen = size;
+                 }
+                 data = data->next;
+               }
+@@ -424,8 +446,7 @@ oc_sec_decode_cred(oc_rep_t *rep, oc_sec_cred_t **owner, bool from_storage,
+         if (non_empty) {
+           oc_uuid_t subject;
+           if (!subjectuuid) {
+-            OC_ERR("invalid subject uuid");
+-            goto error_exit;
++            return false;
+           }
+           oc_str_to_uuid(oc_string(*subjectuuid), &subject);
+           if (!unique_credid(credid, device)) {
+@@ -436,8 +457,7 @@ oc_sec_decode_cred(oc_rep_t *rep, oc_sec_cred_t **owner, bool from_storage,
+           }
+           oc_sec_cred_t *credobj = oc_sec_get_cred(&subject, device);
+           if (!credobj) {
+-            OC_ERR("get cred");
+-            goto error_exit;
++            return false;
+           }
+           credobj->credid = credid;
+           credobj->credtype = credtype;
+@@ -469,8 +489,7 @@ oc_sec_decode_cred(oc_rep_t *rep, oc_sec_cred_t **owner, bool from_storage,
+             credobj->mfgowncertlen = (int *)oc_mem_realloc(
+               credobj->mfgowncertlen, sizeof(int) * (credobj->ownchainlen + 1));
+             if (credobj->mfgowncertlen == NULL) {
+-              OC_ERR("memory alloc");
+-              goto error_exit;
++              return false;
+             }
+ #else
+             oc_abort("alloc failed");
+@@ -486,20 +505,12 @@ oc_sec_decode_cred(oc_rep_t *rep, oc_sec_cred_t **owner, bool from_storage,
+             credobj->mfgtrustca = cert;
+             credobj->mfgtrustcalen = certlen;
+           }
++          if (mfgkey_flag) {
++            credobj->mfgkey = mfgkey;
++            credobj->mfgkeylen = mfgkeylen;
++          }
+         }
+         creds_array = creds_array->next;
+-        continue;
+-      error_exit:
+-#ifdef OC_DYNAMIC_ALLOCATION
+-        if (cert) {
+-          oc_mem_free(cert);
+-        }
+-        if (mfgkey) {
+-          oc_mem_free(mfgkey);
+-        }
+-#endif
+-        OC_ERR("%s", __func__);
+-        return false;
+       }
+     } break;
+     default:
+diff --git a/security/oc_tls.c b/security/oc_tls.c
+index 0b7e5e59..ded7a50a 100644
+--- a/security/oc_tls.c
++++ b/security/oc_tls.c
+@@ -760,23 +760,44 @@ oc_sec_load_mfg_certs(int device)
+ #ifdef OC_DYNAMIC_ALLOCATION
+   int i = 0, j = 0, ret = 0;
+   for (i = 0; i < oc_core_get_num_devices(); i++) {
++    mbedtls_x509_crt *cacert =
++      (mbedtls_x509_crt *)oc_mem_malloc(sizeof(mbedtls_x509_crt));
++    if (!cacert) {
++      OC_ERR( " failed\n  !  oc_mem_malloc failed to allocate cacert\n\n");
++      goto tls_certs_load_err;
++    }
++    mbedtls_x509_crt *owncert =
++      (mbedtls_x509_crt *)oc_mem_malloc(sizeof(mbedtls_x509_crt));
++    if (!owncert) {
++      OC_ERR( " failed\n  !  oc_mem_malloc failed to allocate owncert\n\n");
++      oc_mem_free(cacert);
++      goto tls_certs_load_err;
++    }
++    mbedtls_pk_context *pkey =
++      (mbedtls_pk_context *)oc_mem_malloc(sizeof(mbedtls_pk_context));
++    if (!pkey) {
++      OC_ERR( " failed\n  !  oc_mem_malloc failed to allocate pkey\n\n");
++      oc_mem_free(cacert);
++      oc_mem_free(owncert);
++      goto tls_certs_load_err;
++    }
++    mbedtls_x509_crt_init(cacert);
++    mbedtls_x509_crt_init(owncert);
++    mbedtls_pk_init(pkey);
+     oc_sec_creds_t *creds = oc_sec_get_creds(device);
+     oc_sec_cred_t *c = (oc_sec_cred_t *)oc_list_head(creds->creds);
+     while (c != NULL) {
+       if (c->mfgtrustcalen != 0) {
+-        mbedtls_x509_crt *cacert =
+-          (mbedtls_x509_crt *)oc_mem_malloc(sizeof(mbedtls_x509_crt));
+-        if (!cacert) {
+-          goto tls_certs_load_err;
+-        }
+-        mbedtls_x509_crt_init(cacert);
+-        ret = mbedtls_x509_crt_parse(
+-          cacert, (const unsigned char *)c->mfgtrustca, c->mfgtrustcalen);
+-        if (ret < 0) {
+-          OC_ERR(
+-            " failed\n  !  mbedtls_x509_crt_parse caCert returned -0x%x\n\n",
+-            -ret);
+-          oc_mem_free(cacert);
++        ret = mbedtls_x509_crt_parse( cacert, (const unsigned char *) c->mfgtrustca,
++                                                                      c->mfgtrustcalen );
++        if( ret < 0 ) {
++          OC_ERR( " failed\n  !  mbedtls_x509_crt_parse caCert returned -0x%x\n\n", -ret );
++          mbedtls_x509_crt_free(cacert);
++          mbedtls_x509_crt_free(owncert);
++          mbedtls_pk_free(pkey);
++          cacert = NULL;
++          owncert = NULL;
++          pkey = NULL;
+           goto tls_certs_load_err;
+         } else {
+           OC_DBG("oc_tls: mfgtrustca loaded ");
+@@ -789,70 +810,75 @@ oc_sec_load_mfg_certs(int device)
+         mbedtls_ssl_conf_ca_chain(&client_conf[0], cacert, NULL);
+ #endif /* OC_CLIENT */
+       }
+-      c = c->next;
+-    }
+-    mbedtls_pk_context *pkey = NULL;
+-    c = (oc_sec_cred_t *)oc_list_head(creds->creds);
+-    while (c != NULL) {
+       if (c->mfgkeylen != 0) {
+-         pkey = (mbedtls_pk_context *)oc_mem_malloc(sizeof(mbedtls_pk_context));
+-        if (!pkey) {
+-          goto tls_certs_load_err;
+-        }
+-        mbedtls_pk_init(pkey);
+-        ret = mbedtls_pk_parse_key(pkey, (const unsigned char *)c->mfgkey,
+-                                   c->mfgkeylen, NULL, 0);
+-        if (ret < 0) {
+-          OC_ERR(" failed\n  !  mbedtls_pk_parse_key returned -0x%x\n\n", -ret);
+-          oc_mem_free(pkey);
++        ret =  mbedtls_pk_parse_key(pkey, (const unsigned char *) c->mfgkey,
++                                                                  c->mfgkeylen, NULL, 0 );
++        if( ret < 0 ) {
++          OC_ERR( " failed\n  !  mbedtls_pk_parse_key returned -0x%x\n\n", -ret );
++          mbedtls_x509_crt_free(cacert);
++          mbedtls_x509_crt_free(owncert);
++          mbedtls_pk_free(pkey);
++          cacert = NULL;
++          owncert = NULL;
++          pkey = NULL;
+           goto tls_certs_load_err;
+         } else {
+           OC_DBG("oc_tls: mfgkey loaded ");
+         }
+-        break;
+       }
+-      c = c->next;
+-    }
+-    c = (oc_sec_cred_t *)oc_list_head(creds->creds);
+-    if (c == NULL && pkey) {
+-      oc_mem_free(pkey);
+-    }
+-    while (c != NULL) {
+       for (j = 0; j < c->ownchainlen; j++) {
+         if (c->mfgowncertlen != 0) {
+-          mbedtls_x509_crt *owncert =
+-            (mbedtls_x509_crt *)oc_mem_malloc(sizeof(mbedtls_x509_crt));
+-          if (!owncert) {
+-            goto tls_certs_load_err;
+-          }
+-          mbedtls_x509_crt_init(owncert);
+-          ret = mbedtls_x509_crt_parse(owncert,
+-                                       (const unsigned char *)c->mfgowncert[j],
+-                                       c->mfgowncertlen[j]);
+-          if (ret < 0) {
+-            OC_ERR(
+-              " failed\n  !  mbedtls_x509_crt_parse mfgCert returned -0x%x\n\n",
+-              -ret);
+-            oc_mem_free(owncert);
+-            if (pkey) {
+-              oc_mem_free(pkey);
+-            }
++          ret = mbedtls_x509_crt_parse(owncert, (const unsigned char *) c->mfgowncert[j],
++                                                                        c->mfgowncertlen[j] );
++          if( ret < 0 ) {
++            OC_ERR( " failed\n  !  mbedtls_x509_crt_parse mfgCert returned -0x%x\n\n", -ret );
++            mbedtls_x509_crt_free(cacert);
++            mbedtls_x509_crt_free(owncert);
++            mbedtls_pk_free(pkey);
++            cacert = NULL;
++            owncert = NULL;
++            pkey = NULL;
+             goto tls_certs_load_err;
+           } else {
+             OC_DBG("oc_tls: mfgowncert loaded ");
+           }
+           ret = mbedtls_ssl_conf_own_cert(&server_conf[i], owncert, pkey);
++          if( ret < 0 ) {
++            OC_ERR( " failed\n  !  mbedtls_ssl_conf_own_cert returned -0x%x\n\n", -ret );
++            mbedtls_x509_crt_free(cacert);
++            mbedtls_x509_crt_free(owncert);
++            mbedtls_pk_free(pkey);
++            cacert = NULL;
++            owncert = NULL;
++            pkey = NULL;
++            goto tls_certs_load_err;
++          }
+ #ifdef OC_CLIENT
+ #ifdef OC_TCP
+           ret = mbedtls_ssl_conf_own_cert(&client_conf_tls[0], owncert, pkey);
++          if( ret < 0 ) {
++            OC_ERR( " failed\n  !  mbedtls_ssl_conf_own_cert returned -0x%x\n\n", -ret );
++            mbedtls_x509_crt_free(cacert);
++            mbedtls_x509_crt_free(owncert);
++            mbedtls_pk_free(pkey);
++            cacert = NULL;
++            owncert = NULL;
++            pkey = NULL;
++            goto tls_certs_load_err;
++          }
+ #endif /* OC_TCP */
+           ret = mbedtls_ssl_conf_own_cert(&client_conf[0], owncert, pkey);
+-#endif /* OC_CLIENT */
+-          if (ret < 0) {
+-            OC_ERR(" failed\n  !  mbedtls_ssl_conf_own_cert returned -0x%x\n\n",
+-                   -ret);
++          if( ret < 0 ) {
++            OC_ERR( " failed\n  !  mbedtls_ssl_conf_own_cert returned -0x%x\n\n", -ret );
++            mbedtls_x509_crt_free(cacert);
++            mbedtls_x509_crt_free(owncert);
++            mbedtls_pk_free(pkey);
++            cacert = NULL;
++            owncert = NULL;
++            pkey = NULL;
+             goto tls_certs_load_err;
+           }
++#endif /* OC_CLIENT */
+         }
+       }
+       c = c->next;
+-- 
+2.16.1.windows.1
+

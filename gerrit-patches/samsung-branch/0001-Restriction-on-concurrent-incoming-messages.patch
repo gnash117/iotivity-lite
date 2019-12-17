@@ -1,0 +1,169 @@
+From cc3620de1f5ecc4e4b7e60c446a7ca838cc95463 Mon Sep 17 00:00:00 2001
+From: Harish Kumara M <h.marappa@samsung.com>
+Date: Wed, 25 Jul 2018 15:51:52 +0530
+Subject: [PATCH] Restriction on concurrent incoming messages.
+
+This patch puts the restriction of concurrent messages
+handling by the stack to maximum provided for platform.
+For example for linux, stack can handle upto 5 concurrent
+requests. Stack will not read any more requests once
+having maximun concurrent requests until any of the requests
+are being handled completely and buffer is available to read
+next message.
+
+Different platforms can supply maximum concurrent requests
+through OC_MAX_NUM_CONCURRENT_INCOMING_REQUESTS in
+port/<platform>/config.h.
+
+Change-Id: I2edd4e8bb6b05c7a1d4197046d88a4051955406c
+Signed-off-by: Harish Kumara M <h.marappa@samsung.com>
+---
+ port/linux/config.h    |  3 +++
+ port/linux/ipadapter.c | 30 ++++++++++++++++++++++++++----
+ security/oc_tls.c      | 28 +++++++++++++++++++++++++++-
+ 3 files changed, 56 insertions(+), 5 deletions(-)
+
+diff --git a/port/linux/config.h b/port/linux/config.h
+index df33f951..2e3d0411 100644
+--- a/port/linux/config.h
++++ b/port/linux/config.h
+@@ -27,6 +27,9 @@ typedef uint64_t oc_clock_time_t;
+ #define OC_DNS_LOOKUP
+ #define OC_DNS_LOOKUP_IPV6
+ 
++/* Maximum number of concurrent incoming requests */
++#define OC_MAX_NUM_CONCURRENT_INCOMING_REQUESTS (2)
++
+ /* If we selected support for dynamic memory allocation */
+ #ifdef OC_DYNAMIC_ALLOCATION
+ #define OC_COLLECTIONS
+diff --git a/port/linux/ipadapter.c b/port/linux/ipadapter.c
+index 78563cab..10ad6168 100644
+--- a/port/linux/ipadapter.c
++++ b/port/linux/ipadapter.c
+@@ -23,6 +23,7 @@
+ #include "oc_core_res.h"
+ #include "oc_endpoint.h"
+ #include "oc_network_monitor.h"
++#include "config.h"
+ #include "port/oc_assert.h"
+ #include "port/oc_connectivity.h"
+ #include <arpa/inet.h>
+@@ -64,6 +65,8 @@ static pthread_mutex_t mutex;
+ struct sockaddr_nl ifchange_nl;
+ int ifchange_sock;
+ bool ifchange_initialized;
++static pthread_mutex_t msg_buffer_avail_mutex;
++static pthread_cond_t msg_buffer_avail_cv;
+ 
+ OC_LIST(ip_contexts);
+ OC_MEMB(ip_context_s, ip_context_t, OC_MAX_NUM_DEVICES);
+@@ -753,11 +756,26 @@ recv_msg(int sock, uint8_t *recv_buf, int recv_buf_size,
+   return ret;
+ }
+ 
++static void
++message_avail_cb(int num_messages)
++{
++  (void)num_messages;
++  pthread_mutex_lock(&msg_buffer_avail_mutex);
++  OC_DBG("IP message buffer available, signalling...");
++  pthread_cond_signal(&msg_buffer_avail_cv);
++  pthread_mutex_unlock(&msg_buffer_avail_mutex);
++}
++
+ static void *
+ network_event_thread(void *data)
+ {
+   ip_context_t *dev = (ip_context_t *)data;
+ 
++  /* Declare exclusive fixed-size pool to throttle incoming traffic */
++  OC_MEMB_FIXED(incoming_messages, oc_message_t, OC_MAX_NUM_CONCURRENT_INCOMING_REQUESTS);
++  oc_memb_init(&incoming_messages);
++  oc_memb_set_buffers_avail_cb(&incoming_messages, message_avail_cb);
++
+   fd_set setfds;
+   FD_ZERO(&dev->rfds);
+   /* Monitor network interface changes on the platform from only the 0th logical
+@@ -814,10 +832,14 @@ network_event_thread(void *data)
+         }
+       }
+ 
+-      oc_message_t *message = oc_allocate_message();
+-
+-      if (!message) {
+-        break;
++      oc_message_t *message = oc_allocate_message_from_pool(&incoming_messages);
++      while (!message) {
++        OC_DBG("No more free IP message buffer, enter waiting state...");
++        pthread_mutex_lock(&msg_buffer_avail_mutex);
++        pthread_cond_wait(&msg_buffer_avail_cv, &msg_buffer_avail_mutex);
++        pthread_mutex_unlock(&msg_buffer_avail_mutex);
++        OC_DBG("Got free IP message buffer signal...");
++        message = oc_allocate_message_from_pool(&incoming_messages);
+       }
+ 
+       message->endpoint.device = dev->device;
+diff --git a/security/oc_tls.c b/security/oc_tls.c
+index 9abb5e49..6d177add 100644
+--- a/security/oc_tls.c
++++ b/security/oc_tls.c
+@@ -55,6 +55,10 @@ OC_PROCESS(oc_tls_handler, "TLS Process");
+ OC_MEMB(tls_peers_s, oc_tls_peer_t, OC_MAX_TLS_PEERS);
+ OC_LIST(tls_peers);
+ 
++OC_MEMB_FIXED(in_decrypt_msgs, oc_message_t, OC_MAX_NUM_CONCURRENT_INCOMING_REQUESTS);
++static pthread_mutex_t msg_buffer_avail_mutex;
++static pthread_cond_t msg_buffer_avail_cv;
++
+ static mbedtls_entropy_context entropy_ctx;
+ static mbedtls_ctr_drbg_context ctr_drbg_ctx;
+ static mbedtls_ssl_cookie_ctx cookie_ctx;
+@@ -122,6 +126,16 @@ static const int anon_ciphers[12] = {
+ };
+ #endif /* OC_CLIENT */
+ 
++static void
++message_avail_cb(int num_messages)
++{
++  (void)num_messages;
++  pthread_mutex_lock(&msg_buffer_avail_mutex);
++  OC_DBG("Decrypt message buffer available, signalling...");
++  pthread_cond_signal(&msg_buffer_avail_cv);
++  pthread_mutex_unlock(&msg_buffer_avail_mutex);
++}
++
+ #ifdef OC_DEBUG
+ static void
+ oc_mbedtls_debug(void *ctx, int level, const char *file, int line,
+@@ -683,6 +697,9 @@ oc_tls_init_context(void)
+ 
+   mbedtls_ssl_conf_handshake_timeout(&client_conf[0], 2500, 20000);
+ #endif /* OC_CLIENT */
++
++  oc_memb_init(&in_decrypt_msgs);
++  oc_memb_set_buffers_avail_cb(&in_decrypt_msgs, message_avail_cb);
+   return 0;
+ dtls_init_err:
+   OC_ERR("oc_tls: TLS initialization error");
+@@ -1514,7 +1531,16 @@ read_application_data(oc_tls_peer_t *peer)
+     }
+ #endif /* OC_CLIENT */
+   } else {
+-    oc_message_t *message = oc_allocate_message();
++    oc_message_t *message = oc_allocate_message_from_pool(&in_decrypt_msgs);
++    while (!message) {
++      OC_DBG("No more free decrypt message buffer, enter waiting state...");
++      pthread_mutex_lock(&msg_buffer_avail_mutex);
++      pthread_cond_wait(&msg_buffer_avail_cv, &msg_buffer_avail_mutex);
++      pthread_mutex_unlock(&msg_buffer_avail_mutex);
++      OC_DBG("Got free decrypt message buffer signal...");
++      message = oc_allocate_message_from_pool(&in_decrypt_msgs);
++    }
++
+     if (message) {
+       memcpy(&message->endpoint, &peer->endpoint, sizeof(oc_endpoint_t));
+       int ret = mbedtls_ssl_read(&peer->ssl_ctx, message->data, OC_PDU_SIZE);
+-- 
+2.16.1.windows.1
+

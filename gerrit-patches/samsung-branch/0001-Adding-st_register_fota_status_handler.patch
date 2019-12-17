@@ -1,0 +1,149 @@
+From dc37232ed41282b1b9507aa03cb11d18c2ade59c Mon Sep 17 00:00:00 2001
+From: Jaehong Jo <jaehong.jo@samsung.com>
+Date: Fri, 11 Jan 2019 14:48:27 +0900
+Subject: [PATCH] Adding st_register_fota_status_handler
+
+Change-Id: I0124bbb9cd112a03b69d7db0f02f97a8d520758f
+Signed-off-by: Jaehong <jaehong.jo@samsung.com>
+---
+ service/st-app-fw/include/st_manager.h       | 17 ++++++++++++++++
+ service/st-app-fw/src/st_manager.c           | 29 ++++++++++++++++++++++++++++
+ service/st-app-fw/unittest/stmanagertest.cpp | 12 ++++++++++++
+ 3 files changed, 58 insertions(+)
+
+diff --git a/service/st-app-fw/include/st_manager.h b/service/st-app-fw/include/st_manager.h
+index 5454197a..40bf2753 100644
+--- a/service/st-app-fw/include/st_manager.h
++++ b/service/st-app-fw/include/st_manager.h
+@@ -67,6 +67,11 @@ typedef void (*st_rpk_handle_cpubkey_and_token_cb_t)(uint8_t *cpub_key,
+ typedef void (*st_rpk_handle_priv_key_cb_t)(uint8_t *priv_key,
+                                             int *priv_key_len);
+ 
++/**
++  @brief A function pointer for handling the fota status.
++*/
++typedef void (*st_fota_status_cb_t)(void);
++
+ /**
+   @brief A function to initialize ST application framework.
+   @return st_error_t An enumeration of possible outcomes.
+@@ -204,6 +209,18 @@ bool st_register_rpk_handler(st_rpk_handle_cpubkey_and_token_cb_t pubkey_cb,
+ */
+ void st_unregister_rpk_handler(void);
+ 
++/**
++  @brief Function for register fota status handler
++  @param cb Callback function to notify the fota status.
++  @return Returns true if success.
++*/
++bool st_register_fota_status_handler(st_fota_status_cb_t cb);
++
++/**
++  @brief Function for unregister fota status handler
++*/
++void st_unregister_fota_status_handler(void);
++
+ /**
+   @brief A function set device profile.
+   @param device_def Unsigned char array showing CBOR info.
+diff --git a/service/st-app-fw/src/st_manager.c b/service/st-app-fw/src/st_manager.c
+index 00fbf60b..f577996b 100644
+--- a/service/st-app-fw/src/st_manager.c
++++ b/service/st-app-fw/src/st_manager.c
+@@ -85,6 +85,7 @@ typedef struct
+ static st_status_t g_main_status = ST_STATUS_IDLE;
+ #endif
+ static st_status_cb_t g_st_status_cb = NULL;
++static st_fota_status_cb_t g_st_fota_status_cb = NULL;
+ 
+ static sc_properties st_vendor_props;
+ 
+@@ -383,6 +384,8 @@ oc_define_interrupt_handler(st_manager)
+       break;
+     case ST_STATUS_DONE:
+       st_print_log("[ST_MGR] Ready to Control ST-Things\n");
++      if (g_st_fota_status_cb)
++        g_st_fota_status_cb();
+       break;
+     case ST_STATUS_RESET:
+       if (st_manager_evt_reset_handler() != 0) {
+@@ -790,6 +793,7 @@ st_manager_deinitialize(void)
+   st_free_device_profile();
+   st_unregister_resource_handler();
+   st_unregister_status_handler();
++  st_unregister_fota_status_handler();
+   st_unregister_otm_confirm_handler();
+   st_turn_off_soft_AP();
+   st_vendor_props_shutdown();
+@@ -885,6 +889,30 @@ st_unregister_rpk_handler(void)
+ #endif /* !OC_SECURITY */
+ }
+ 
++bool
++st_register_fota_status_handler(st_fota_status_cb_t cb)
++{
++  if (!cb) {
++    st_print_log(
++      "[ST_MGR] Failed to register fota status - invalid parameter\n");
++    return false;
++  }
++  if (g_st_fota_status_cb) {
++    st_print_log(
++      "[ST_MGR] Failed to register fota status handler - already registered\n");
++    return false;
++  }
++
++  g_st_fota_status_cb = cb;
++  return true;
++}
++
++void
++st_unregister_fota_status_handler(void)
++{
++  g_st_fota_status_cb = NULL;
++}
++
+ #ifndef STATE_MODEL
+ static void
+ st_manager_evt_stop_handler(void)
+@@ -1197,6 +1225,7 @@ change_ready_to_idle(void)
+   st_free_device_profile();
+   st_unregister_resource_handler();
+   st_unregister_status_handler();
++  st_unregister_fota_status_handler();
+   st_unregister_otm_confirm_handler();
+   st_turn_off_soft_AP();
+   st_vendor_props_shutdown();
+diff --git a/service/st-app-fw/unittest/stmanagertest.cpp b/service/st-app-fw/unittest/stmanagertest.cpp
+index eed77551..0d9bdf56 100644
+--- a/service/st-app-fw/unittest/stmanagertest.cpp
++++ b/service/st-app-fw/unittest/stmanagertest.cpp
+@@ -66,6 +66,11 @@ static void st_status_handler_test(st_status_t status)
+     }
+ }
+ 
++static void
++st_fota_status_handler_test(void)
++{
++}
++
+ #ifdef STATE_MODEL
+ static bool bReset=false;
+ static void st_status_handler_reset_test(st_status_t status)
+@@ -285,6 +290,13 @@ TEST_F(TestSTManager, st_register_status_handler)
+     st_unregister_status_handler();
+ }
+ 
++TEST_F(TestSTManager, st_register_fota_status_handler)
++{
++    bool ret = st_register_fota_status_handler(st_fota_status_handler_test);
++    EXPECT_TRUE(ret);
++    st_unregister_fota_status_handler();
++}
++
+ #ifdef OC_SECURITY
+ TEST_F(TestSTManager, st_register_rpk_handler)
+ {
+-- 
+2.16.1.windows.1
+

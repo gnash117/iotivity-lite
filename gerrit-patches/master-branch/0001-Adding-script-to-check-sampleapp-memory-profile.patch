@@ -1,0 +1,310 @@
+From 99f60bf906486f88b822ee08206196f5f9e0d91e Mon Sep 17 00:00:00 2001
+From: towhid <t.islam@samsung.com>
+Date: Tue, 15 May 2018 15:54:17 +0600
+Subject: [PATCH] Adding script to check sampleapp memory profile
+
+required tool:
+$sudo apt-get install valgrind
+$sudo apt-get install massif-visualizer
+
+usages:
+$./memory_profile.sh <sample_app_name>
+after sample app run and close successfully. the script
+will generate memory profile file on memory_profile/massif.out.*
+download and open with massif-visualizer to view memory usage.
+
+Bug: https://jira.iotivity.org/browse/LITE-14
+Change-Id: I82246c2c60565f68ba1fb336bced016a565e4ab9
+Signed-off-by: towhid <t.islam@samsung.com>
+---
+ port/linux/Makefile                 |   4 +
+ tests/port/linux/configFile.txt     |   7 ++
+ tests/port/linux/coverage_report.sh |   2 +-
+ tests/port/linux/memory_profile.sh  | 149 ++++++++++++++++++++++++++++++++++++
+ tests/port/linux/test-runner.sh     |  69 +++++++++++++++++
+ 5 files changed, 230 insertions(+), 1 deletion(-)
+ create mode 100644 tests/port/linux/configFile.txt
+ create mode 100755 tests/port/linux/memory_profile.sh
+ create mode 100755 tests/port/linux/test-runner.sh
+
+diff --git a/port/linux/Makefile b/port/linux/Makefile
+index c28e9162..53b636c3 100644
+--- a/port/linux/Makefile
++++ b/port/linux/Makefile
+@@ -18,6 +18,7 @@ libdir = $(exec_prefix)/lib
+ includedir = $(prefix)/include
+ pkgconfigdir = $(libdir)/pkgconfig
+ EXTRA_CFLAGS =
++TEST_RUNNER?= $(ROOT_DIR)/tests/port/linux/test-runner.sh
+ 
+ MBEDTLS_DIR := $(ROOT_DIR)/deps/mbedtls
+ GTEST_DIR = $(ROOT_DIR)/deps/gtest
+@@ -141,6 +142,9 @@ all: $(CONSTRAINED_LIBS) $(SAMPLES) $(PC)
+ test: $(UNIT_TESTS)
+ 	for test in $^ ; do ./$${test} ; done
+ 
++qa_test: $(UNIT_TESTS)
++	for test in $^ ; do ${TEST_RUNNER} $${test} || exit $${?} ; done
++
+ .PHONY: test clean
+ 
+ $(GTEST):
+diff --git a/tests/port/linux/configFile.txt b/tests/port/linux/configFile.txt
+new file mode 100644
+index 00000000..d7f0d428
+--- /dev/null
++++ b/tests/port/linux/configFile.txt
+@@ -0,0 +1,7 @@
++TEST_RUN=1
++TEST_APP_RUN=no
++TEST_MEMORY_APP=yes
++MEMORY_TRACE=-mt
++MEMORY_PROFILE=-mp
++MEMORY_APP_NOT_TEST=empty
++
+diff --git a/tests/port/linux/coverage_report.sh b/tests/port/linux/coverage_report.sh
+index 2bfeb585..df300431 100755
+--- a/tests/port/linux/coverage_report.sh
++++ b/tests/port/linux/coverage_report.sh
+@@ -15,7 +15,7 @@ cd $linux_dir
+ sed -i "s/$match/$insert/" $file
+ 
+ make clean
+-make test
++make qa_test
+ mkdir ${iotivity}/coverage_report
+ lcov -c -d ../../ -o ${iotivity}/coverage_report/new_coverage.info && lcov --remove ${iotivity}/coverage_report/new_coverage.info 'port/unittest/*' '/usr/include/*' 'api/unittest/*' -o ${iotivity}/coverage_report/main_coverage.info
+ 
+diff --git a/tests/port/linux/memory_profile.sh b/tests/port/linux/memory_profile.sh
+new file mode 100755
+index 00000000..6bf20ba7
+--- /dev/null
++++ b/tests/port/linux/memory_profile.sh
+@@ -0,0 +1,149 @@
++#!/bin/bash
++# ****************************************************************************
++# *
++# * Copyright 2018 Samsung Electronics All Rights Reserved.
++# *
++# * Licensed under the Apache License, Version 2.0 (the "License");
++# * you may not use this file except in compliance with the License.
++# * You may obtain a copy of the License at
++# *
++# * http://www.apache.org/licenses/LICENSE-2.0
++# *
++# * Unless required by applicable law or agreed to in writing,
++# * software distributed under the License is distributed on an
++# * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
++# * either express or implied. See the License for the specific
++# * language governing permissions and limitations under the License.
++# *
++# ****************************************************************************/
++
++#required tool
++#sudo apt-get install valgrind
++#sudo apt-get install massif-visualizer
++
++set -e
++set -x
++
++function printUsage()
++{
++    echo
++    echo -e "Memory Profile script usage:"
++    echo -e "$ $0 -mt -mp <sampleappname>"
++    echo
++    echo -e "    -mt: wil memory trace of given sampleapp"
++    echo -e "    -mp: wil make memory profile of given sampleapp"
++    echo
++    exit
++}
++
++function doReadFromFile()
++{
++    tail "${iotivity}/memory_profile/$memoryfile"
++}
++
++function doMemoryProfile()
++{
++    for var in "${POSITIONAL[@]}"
++    do
++        valgrind --tool=massif --time-unit=B --stacks=yes --heap=yes ./$var
++        massiffile="massif.out.$(echo "$var" | tr '/' ',').log.txt"
++
++        ms_print massif.out.* >> "${iotivity}/memory_profile/$massiffile"
++        memoryfile="massif.out.$(echo "$var" | tr '/' ',').peak.log.txt"
++        awk '/KB/{getline;gsub("[:^]","");print $1}' "${iotivity}/memory_profile/$massiffile" >> "${iotivity}/memory_profile/$memoryfile"
++
++        mv massif.out.* "${iotivity}/memory_profile/"
++    done
++}
++function doUpdateConfirFile()
++{
++    REPLACEMENT_VALUE=$1
++    sed -i "s/\($TARGET_KEY *= *\).*/\1$REPLACEMENT_VALUE/" "$CONFIG_FILE"
++}
++
++function doMemoryTrace()
++{
++    doUpdateConfirFile 0
++    make clean
++    make MEMTRACE=1
++    make qa_test
++
++    for var in "${POSITIONAL[@]}"
++    do
++        unrechablememoryfile="memory_trace.out.$(echo "$var" | tr '/' ',').log.txt"
++        ./$var >> "${iotivity}/memory_profile/$unrechablememoryfile"
++    done
++
++    doUpdateConfirFile 1
++}
++
++function initialize()
++{
++    POSITIONAL=()
++    MEMTRACE="no"
++    MEMPROFILE="no"
++    iotivity="$PWD"
++    TARGET_KEY="TEST_RUN"
++
++    root_dir="${iotivity}/../.."
++    linux_dir="${root_dir}/port/linux"
++    test_dir="${root_dir}/tests/port/linux"
++    cd "$linux_dir"
++    CONFIG_FILE="$test_dir/configFile.txt"
++    echo -e "CONFIG_FILE = $CONFIG_FILE"
++    #for script run need to remove previous file
++    #rm -rf "${iotivity}/memory_profile"
++    #rm -rf massif.out.*
++
++    if [ -d "${iotivity}/memory_profile" ];
++    then
++        echo -e "Exists"
++    else
++        mkdir "${iotivity}/memory_profile"
++    fi
++}
++
++function configure()
++{
++    while [[ $# -gt 0 ]]
++    do
++    key="$1"
++    case $key in
++        h|-h|help|-help|--help|?)  PrintUsage;;
++        -mt|--memorytrace)
++        MEMTRACE="yes"
++        shift # past argument
++        ;;
++        -mp|--memoryprofile)
++        MEMPROFILE="yes"
++        shift # past argument
++        ;;
++        --default)
++        DEFAULT=YES
++        shift # past argument
++        ;;
++        *)    # unknown option
++        POSITIONAL+=("$1") # save it in an array for later
++        shift # past argument
++        ;;
++    esac
++    done
++    set -- "${POSITIONAL[@]}" # restore positional parameters
++
++    echo MEMTRACE  = "${MEMTRACE}"
++    echo MEMPROFILE     = "${MEMPROFILE}"
++}
++
++initialize
++configure "$@"
++
++if [ "${MEMPROFILE}" = 'yes' ]
++then
++    doMemoryProfile
++fi
++
++# make with memtrace to get unreachable memory with the address function
++if [ "${MEMTRACE}" = 'yes' ]
++then
++    doMemoryTrace
++fi
+diff --git a/tests/port/linux/test-runner.sh b/tests/port/linux/test-runner.sh
+new file mode 100755
+index 00000000..0c55a43d
+--- /dev/null
++++ b/tests/port/linux/test-runner.sh
+@@ -0,0 +1,69 @@
++#!/bin/bash
++# ****************************************************************************
++# *
++# * Copyright 2018 Samsung Electronics All Rights Reserved.
++# *
++# * Licensed under the Apache License, Version 2.0 (the "License");
++# * you may not use this file except in compliance with the License.
++# * You may obtain a copy of the License at
++# *
++# * http://www.apache.org/licenses/LICENSE-2.0
++# *
++# * Unless required by applicable law or agreed to in writing,
++# * software distributed under the License is distributed on an
++# * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
++# * either express or implied. See the License for the specific
++# * language governing permissions and limitations under the License.
++# *
++# ****************************************************************************/
++
++set -e
++set -x
++
++currentDir="$PWD"
++rootDir="../.."
++
++testApp="${1}"
++
++memProfileScript="${currentDir}/${rootDir}/tests/port/linux/memory_profile.sh"
++configFile="${currentDir}/${rootDir}/tests/port/linux/configFile.txt"
++
++function readConfig()
++{
++    . ${configFile}
++    echo -e "  Read Memory Profile Configuration: ${TEST_APP_RUN}"
++    echo -e "  Read Memory Profile Configuration: ${TEST_MEMORY_APP} ${MEMORY_TRACE} ${MEMORY_PROFILE} ${MEMORY_APP_NOT_TEST}"
++    echo
++}
++
++function doMemoryProfileTest()
++{
++    if [ ${MEMORY_APP_NOT_TEST} != ${testApp} ]
++    then
++        bash ${memProfileScript} ${MEMORY_TRACE} ${MEMORY_PROFILE} ${testApp}
++    fi
++}
++
++function doRunTestApp()
++{
++    ./${testApp}
++}
++
++readConfig
++
++if [ "${TEST_RUN}" = "0" ]
++then
++    #noting to do
++    echo -e ""
++    exit
++fi
++
++if [ "${TEST_APP_RUN}" = "yes" ]
++then
++    doRunTestApp
++fi
++
++if [ "${TEST_MEMORY_APP}" = "yes" ]
++then
++    doMemoryProfileTest
++fi
+-- 
+2.16.1.windows.1
+

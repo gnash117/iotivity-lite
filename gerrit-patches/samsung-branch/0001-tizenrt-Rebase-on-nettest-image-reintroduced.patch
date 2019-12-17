@@ -1,0 +1,36 @@
+From f95951b4afc623c2a271a654026e321666884ab9 Mon Sep 17 00:00:00 2001
+From: Philippe Coval <p.coval@samsung.com>
+Date: Mon, 2 Jul 2018 14:51:09 +0200
+Subject: [PATCH] tizenrt: Rebase on nettest image (reintroduced)
+
+It has LIBM enabled, then configure will copy math.h
+to /usr/include
+then compiler's math.h will not be used
+
+Bug: https://jira.iotivity.org/projects/LITE/issues/LITE-4
+Origin: https://gerrit.iotivity.org/gerrit/26091
+Change-Id: Ia174a5c2a90af4e74d37cd40f2f991737371c1a5
+Signed-off-by: Philippe Coval <p.coval@samsung.com>
+Reviewed-on: https://gerrit.iotivity.org/gerrit/26091
+Tested-by: IoTivity Jenkins <jenkins-daemon@iotivity.org>
+Reviewed-by: Uze Choi <uzchoi@samsung.com>
+---
+ tests/port/tizenrt/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/port/tizenrt/Makefile b/tests/port/tizenrt/Makefile
+index 31197da5..ac42a9b2 100644
+--- a/tests/port/tizenrt/Makefile
++++ b/tests/port/tizenrt/Makefile
+@@ -31,7 +31,7 @@ os_dir?=${tizenrt_dir}/os
+ os_url?=https://github.com/Samsung/TizenRT
+ os_branch?=1.1_Public_Release
+ os_machine?=artik053
+-os_image_type?=minimal
++os_image_type?=nettest
+ configure_file?=${os_dir}/.config
+ os_external_makefile?=${tizenrt_dir}/external/Makefile
+ 
+-- 
+2.16.1.windows.1
+

@@ -1,0 +1,434 @@
+From 1cc91cdfce48377a199ed54dd576cc0df129db99 Mon Sep 17 00:00:00 2001
+From: Iurii Metelytsia <i.metelytsia@samsung.com>
+Date: Tue, 12 Nov 2019 13:07:00 +0200
+Subject: [PATCH] [LITE-97] Auditable Events log population
+
+Change-Id: I16780161069c095a14205d33e8884c3835f9e3d3
+Signed-off-by: Iurii Metelytsia <i.metelytsia@samsung.com>
+---
+ api/oc_ri.c             | 41 +++++++++++++++++++++++++++++++++++++++++
+ messaging/coap/coap.c   |  6 +++++-
+ messaging/coap/engine.c | 49 +++++++++++++++++++++++++++++++++++++++++++++++++
+ port/linux/Makefile     |  2 +-
+ port/oc_log.h           | 49 +++++++++++++++++++++++++++++++++++++++++++++++++
+ security/oc_acl.c       |  6 ++++++
+ security/oc_audit.c     | 38 ++++++++++++++++++++++++++++++++++++++
+ security/oc_audit.h     | 35 +++++++++++++++++++++++++++++++++++
+ security/oc_tls.c       | 17 +++++++++++++++++
+ 9 files changed, 241 insertions(+), 2 deletions(-)
+ create mode 100644 security/oc_audit.c
+ create mode 100644 security/oc_audit.h
+
+diff --git a/api/oc_ri.c b/api/oc_ri.c
+index 010badcc..cc2e605d 100644
+--- a/api/oc_ri.c
++++ b/api/oc_ri.c
+@@ -54,7 +54,10 @@
+ 
+ #ifdef OC_SECURITY
+ #include "security/oc_acl_internal.h"
++#include "security/oc_pstat.h"
++#include "security/oc_roles.h"
+ #include "security/oc_tls.h"
++#include "security/oc_audit.h"
+ #endif /* OC_SECURITY */
+ 
+ #ifdef OC_SERVER
+@@ -609,6 +612,40 @@ does_interface_support_method(oc_interface_mask_t iface_mask,
+   return supported;
+ }
+ 
++
++#ifdef OC_SECURITY
++static void
++oc_ri_audit_log(oc_method_t method, oc_resource_t *resource, oc_endpoint_t *endpoint)
++{
++  static const size_t LINE_WIDTH = 80;
++  char aux_arr[6][LINE_WIDTH];
++  memset(aux_arr, 0, sizeof(aux_arr));
++  char* aux[] = {aux_arr[0], aux_arr[1], aux_arr[2], aux_arr[3], aux_arr[4], aux_arr[5]};
++  size_t idx = 1;
++  SNPRINTFipaddr(aux[0], LINE_WIDTH, *endpoint);
++  oc_tls_peer_t *peer = oc_tls_get_peer(endpoint);
++  if (peer) {
++    oc_uuid_to_str(&peer->uuid, aux[idx++], LINE_WIDTH);
++  }
++  memcpy(aux[idx++], oc_string(resource->uri), oc_string_len(resource->uri));
++  static const char *method_str_val[] = { "UNKNOWN", "RETRIEVE", "UPDATE", "UPDATE", "DELETE" };
++  snprintf(aux[idx++], LINE_WIDTH, "attempt to %s the resource", method_str_val[method]);
++  static const char *state_str_val[] = { "RESET", "RFOTM", "RFPRO", "RFNOP", "SRESET" };
++  int state = oc_sec_get_pstat(endpoint->device)->s;
++  snprintf(aux[idx++], LINE_WIDTH, "device is in %s", state_str_val[state]);
++  snprintf(aux[idx++], LINE_WIDTH, "No roles asserted");
++#ifdef OC_PKI
++  if (peer) {
++    size_t pos = 0;
++    for (oc_sec_cred_t *rc = oc_sec_get_roles(peer); rc && pos < LINE_WIDTH; rc = rc->next) {
++      pos += snprintf(aux[idx-1]+pos, LINE_WIDTH-pos-1, "%s ", oc_string(rc->role.role));
++    }
++  }
++#endif /* OC_PKI */
++  oc_audit_log("AC-1", "Access Denied", 0x01, 2, (const char **)aux, idx);
++}
++#endif /* OC_SECURITY */
++
+ #ifdef OC_BLOCK_WISE
+ bool
+ oc_ri_invoke_coap_entity_handler(void *request, void *response,
+@@ -806,6 +843,9 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
+         !does_interface_support_method(iface_mask, method)) {
+       forbidden = true;
+       bad_request = true;
++#ifdef OC_SECURITY
++      oc_audit_log("COMM-1", "Operation not supported", 0x40, 2, NULL, 0);
++#endif
+     }
+   }
+ 
+@@ -852,6 +892,7 @@ oc_ri_invoke_coap_entity_handler(void *request, void *response, uint8_t *buffer,
+      */
+     if (!oc_sec_check_acl(method, cur_resource, endpoint)) {
+       authorized = false;
++      oc_ri_audit_log(method, cur_resource, endpoint);
+     } else
+ #endif /* OC_SECURITY */
+     {
+diff --git a/messaging/coap/coap.c b/messaging/coap/coap.c
+index 9fc7851a..50199953 100644
+--- a/messaging/coap/coap.c
++++ b/messaging/coap/coap.c
+@@ -57,6 +57,7 @@
+ 
+ #ifdef OC_SECURITY
+ #include "security/oc_tls.h"
++#include "security/oc_audit.h"
+ #endif
+ 
+ /*---------------------------------------------------------------------------*/
+@@ -1154,7 +1155,10 @@ coap_udp_parse_message(void *packet, uint8_t *data, uint16_t data_len)
+   coap_status_t ret =
+     coap_parse_token_option(packet, data, data_len, current_option);
+   if (COAP_NO_ERROR != ret) {
+-    OC_DBG("coap_parse_token_option failed!");
++    OC_DBG("coap_parse_token_option failed! %d", ret);
++#ifdef OC_SECURITY
++    oc_audit_log("COMM-1", "Could not parse token option", 0x40, 2, NULL, 0); // this is optional
++#endif
+     return ret;
+   }
+ 
+diff --git a/messaging/coap/engine.c b/messaging/coap/engine.c
+index f5c73b44..84b1d1ea 100644
+--- a/messaging/coap/engine.c
++++ b/messaging/coap/engine.c
+@@ -56,6 +56,7 @@
+ 
+ #ifdef OC_SECURITY
+ #include "security/oc_tls.h"
++#include "security/oc_audit.h"
+ #endif /* OC_SECURITY */
+ 
+ #ifdef OC_BLOCK_WISE
+@@ -120,6 +121,49 @@ coap_send_empty_ack(uint16_t mid, oc_endpoint_t *endpoint)
+   }
+ }
+ 
++#ifdef OC_SECURITY
++static char *hexdump(const uint8_t *data, size_t length)
++{
++  char *res = NULL;
++#ifdef OC_DYNAMIC_ALLOCATION
++  if (data && length != 0) {
++    size_t size = length * 3 + 1;
++    if ((res = (char *)malloc(size)) != NULL) {
++      memset(res, 0, size);
++      SNPRINTFbytes(res, size - 1, data, length);
++    }
++  }
++#else /* OC_DYNAMIC_ALLOCATION */
++  (void)data;
++  (void)length;
++#endif /* OC_DYNAMIC_ALLOCATION */
++  return res;
++}
++
++static void
++coap_audit_log(oc_message_t *msg)
++{
++  char ipaddr[IPADDR_BUFF_SIZE];
++  SNPRINTFipaddr(ipaddr, IPADDR_BUFF_SIZE, msg->endpoint);
++  char buff1[16];
++  memset(buff1, 0, sizeof(buff1));
++  if (msg->length >= 4) {
++    snprintf(buff1, sizeof(buff1), "[%02x:%02x:%02x:%02x]", msg->data[0], msg->data[1], msg->data[2], msg->data[3]);
++  }
++  // oc_string_array item length cannot exceed 128 bytes
++  // hexdump format "XX:XX:..." : each byte is represented by 3 symbols
++  char *buff2 = hexdump((const uint8_t *)msg->data, msg->length < 42 ? msg->length : 42);
++  char *aux[] = {ipaddr, buff1, buff2};
++  oc_audit_log("COMM-1", "Unexpected CoAP command", 0x40, 2, (const char **)aux,
++               (!buff2) ? 2 : 3);
++#ifdef OC_DYNAMIC_ALLOCATION
++  if (buff2) {
++    free(buff2);
++  }
++#endif /* OC_DYNAMIC_ALLOCATION */
++}
++#endif /* OC_SECURITY */
++
+ /*---------------------------------------------------------------------------*/
+ /*- Internal API ------------------------------------------------------------*/
+ /*---------------------------------------------------------------------------*/
+@@ -677,6 +721,11 @@ coap_receive(oc_message_t *msg)
+       }
+ #endif /* OC_CLIENT */
+     }
++  } else {
++    OC_ERR("Unexpected CoAP command");
++#ifdef OC_SECURITY
++    coap_audit_log(msg);
++#endif
+   }
+ 
+ init_reset_message:
+diff --git a/port/linux/Makefile b/port/linux/Makefile
+index 74d3d2d5..7064b534 100644
+--- a/port/linux/Makefile
++++ b/port/linux/Makefile
+@@ -160,7 +160,7 @@ ifeq ($(SWUPDATE),1)
+ endif
+ 
+ ifneq ($(SECURE),0)
+-	SRC += $(addprefix ../../security/,oc_acl.c oc_cred.c oc_doxm.c oc_pstat.c oc_tls.c oc_svr.c oc_store.c oc_pki.c oc_certs.c oc_sp.c oc_keypair.c oc_csr.c oc_roles.c oc_ael.c)
++	SRC += $(addprefix ../../security/,oc_acl.c oc_cred.c oc_doxm.c oc_pstat.c oc_tls.c oc_svr.c oc_store.c oc_pki.c oc_certs.c oc_sp.c oc_keypair.c oc_csr.c oc_roles.c oc_ael.c oc_audit.c)
+ 	SRC_COMMON += $(addprefix $(MBEDTLS_DIR)/library/,${DTLS})
+ 	MBEDTLS_PATCH_FILE := $(MBEDTLS_DIR)/patched.txt
+ ifeq ($(DYNAMIC),1)
+diff --git a/port/oc_log.h b/port/oc_log.h
+index 91298fbe..0da86862 100644
+--- a/port/oc_log.h
++++ b/port/oc_log.h
+@@ -27,6 +27,8 @@ extern "C"
+ #endif
+ 
+ #define PRINT(...) printf(__VA_ARGS__)
++#define SPRINTF(...) sprintf(__VA_ARGS__)
++#define SNPRINTF(...) snprintf(__VA_ARGS__)
+ 
+ #define PRINTipaddr(endpoint)                                                  \
+   do {                                                                         \
+@@ -104,6 +106,53 @@ extern "C"
+     }                                                                          \
+   } while (0)
+ 
++#define IPADDR_BUFF_SIZE    64 // max size : scheme://[ipv6]:port = 59 bytes
++
++#define SNPRINTFipaddr(str, size, endpoint)                                    \
++  do {                                                                         \
++    const char *scheme = "coap";                                               \
++    if ((endpoint).flags & SECURED)                                            \
++      scheme = "coaps";                                                        \
++    if ((endpoint).flags & TCP)                                                \
++      scheme = "coap+tcp";                                                     \
++    if ((endpoint).flags & TCP && (endpoint).flags & SECURED)                  \
++      scheme = "coaps+tcp";                                                    \
++    memset(str, 0, size);                                                      \
++    if ((endpoint).flags & IPV4) {                                             \
++      SNPRINTF(str, size, "%s://%d.%d.%d.%d:%d", scheme,                       \
++            ((endpoint).addr.ipv4.address)[0],                                 \
++            ((endpoint).addr.ipv4.address)[1],                                 \
++            ((endpoint).addr.ipv4.address)[2],                                 \
++            ((endpoint).addr.ipv4.address)[3], (endpoint).addr.ipv4.port);     \
++    } else {                                                                   \
++      SNPRINTF(str, size,                                                      \
++        "%s://"                                                                \
++        "[%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:%02x%02x:"     \
++        "%02x%02x]:%d",                                                        \
++        scheme, ((endpoint).addr.ipv6.address)[0],                             \
++        ((endpoint).addr.ipv6.address)[1], ((endpoint).addr.ipv6.address)[2],  \
++        ((endpoint).addr.ipv6.address)[3], ((endpoint).addr.ipv6.address)[4],  \
++        ((endpoint).addr.ipv6.address)[5], ((endpoint).addr.ipv6.address)[6],  \
++        ((endpoint).addr.ipv6.address)[7], ((endpoint).addr.ipv6.address)[8],  \
++        ((endpoint).addr.ipv6.address)[9], ((endpoint).addr.ipv6.address)[10], \
++        ((endpoint).addr.ipv6.address)[11],                                    \
++        ((endpoint).addr.ipv6.address)[12],                                    \
++        ((endpoint).addr.ipv6.address)[13],                                    \
++        ((endpoint).addr.ipv6.address)[14],                                    \
++        ((endpoint).addr.ipv6.address)[15], (endpoint).addr.ipv6.port);        \
++    }                                                                          \
++  } while (0)
++
++#define SNPRINTFbytes(buff, size, data, len)                                   \
++  do {                                                                         \
++    char *beg = (buff);                                                        \
++    char *end = (buff) + (size);                                               \
++    for (size_t i = 0; beg <= (end - 3) && i < (len); i++) {                   \
++      beg += (i == 0) ? SPRINTF(beg, "%02x", data[i]) :                        \
++                        SPRINTF(beg, ":%02x", data[i]);                        \
++    }                                                                          \
++  } while (0)
++
+ #ifdef OC_DEBUG
+ #define OC_LOG(level, ...)                                                     \
+   do {                                                                         \
+diff --git a/security/oc_acl.c b/security/oc_acl.c
+index 8c6786c2..d97ec035 100644
+--- a/security/oc_acl.c
++++ b/security/oc_acl.c
+@@ -341,6 +341,12 @@ oc_sec_check_acl(oc_method_t method, oc_resource_t *resource,
+   if (uuid) {
+     oc_sec_doxm_t *doxm = oc_sec_get_doxm(endpoint->device);
+     oc_sec_creds_t *creds = oc_sec_get_creds(endpoint->device);
++    if (memcmp(uuid->id, aclist[endpoint->device].rowneruuid.id, 16) == 0 &&
++        oc_string_len(resource->uri) == 12 &&
++        memcmp(oc_string(resource->uri), "/oic/sec/ael", 12) == 0) {
++      OC_DBG("oc_acl: peer's UUID matches ael's rowneruuid");
++      return true;
++    }
+     if (memcmp(uuid->id, aclist[endpoint->device].rowneruuid.id, 16) == 0 &&
+         oc_string_len(resource->uri) == 13 &&
+         memcmp(oc_string(resource->uri), "/oic/sec/acl2", 13) == 0) {
+diff --git a/security/oc_audit.c b/security/oc_audit.c
+new file mode 100644
+index 00000000..7f4f9207
+--- /dev/null
++++ b/security/oc_audit.c
+@@ -0,0 +1,38 @@
++/*
++// Copyright (c) 2016-2019 Intel Corporation
++// Copyright 2019 Samsung Electronics All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//      http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++*/
++
++#ifdef OC_SECURITY
++
++#include <stdlib.h>
++#include <stdbool.h>
++#include "oc_audit.h"
++#include "oc_ael.h"
++#include "port/oc_log.h"
++
++void
++oc_audit_log(const char *aeid, const char *message, uint8_t category, uint8_t priority,
++             const char **aux, size_t aux_len)
++{
++  bool ret = oc_sec_ael_add(category, priority, aeid, message, aux, aux_len);
++#ifndef DEBUG
++  (void)ret;
++#else
++  OC_DBG("audit_log: %s %s %u %u; status = %d", aeid, message, category, priority, ret);
++#endif
++}
++
++#endif /* OC_SECURITY */
+diff --git a/security/oc_audit.h b/security/oc_audit.h
+new file mode 100644
+index 00000000..2856d053
+--- /dev/null
++++ b/security/oc_audit.h
+@@ -0,0 +1,35 @@
++/*
++// Copyright (c) 2016-2019 Intel Corporation
++// Copyright 2019 Samsung Electronics All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//      http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++*/
++
++#ifndef OC_AUDIT_H
++#define OC_AUDIT_H
++
++#include "oc_config.h"
++
++#ifdef __cplusplus
++extern "C"
++{
++#endif
++
++void oc_audit_log(const char *aeid, const char *message, uint8_t category, uint8_t priority,
++                  const char **aux, size_t aux_len);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* OC_AUDIT_H */
+diff --git a/security/oc_tls.c b/security/oc_tls.c
+index 3e7a4a7c..f495f256 100644
+--- a/security/oc_tls.c
++++ b/security/oc_tls.c
+@@ -52,6 +52,7 @@
+ #include "oc_roles.h"
+ #include "oc_svr.h"
+ #include "oc_tls.h"
++#include "oc_audit.h"
+ 
+ OC_PROCESS(oc_tls_handler, "TLS Process");
+ OC_MEMB(tls_peers_s, oc_tls_peer_t, OC_MAX_TLS_PEERS);
+@@ -499,6 +500,16 @@ oc_tls_pbkdf2(const unsigned char *pin, size_t pin_len, oc_uuid_t *uuid,
+   return ret;
+ }
+ 
++static void
++oc_tls_audit_log(const char *aeid, const char *message, uint8_t category, uint8_t priority,
++           oc_tls_peer_t *peer)
++{
++  char buff[IPADDR_BUFF_SIZE];
++  SNPRINTFipaddr(buff, IPADDR_BUFF_SIZE, peer->endpoint);
++  char *aux[] = {buff};
++  oc_audit_log(aeid, message, category, priority, (const char **)aux, 1);
++}
++
+ static int
+ get_psk_cb(void *data, mbedtls_ssl_context *ssl, const unsigned char *identity,
+            size_t identity_len)
+@@ -553,6 +564,8 @@ get_psk_cb(void *data, mbedtls_ssl_context *ssl, const unsigned char *identity,
+     }
+   }
+   OC_ERR("oc_tls: could not find peer credential");
++  oc_tls_audit_log("AUTH-1", "DLTS handshake error, could not find peer credential",
++                   0, 0, peer);
+   return -1;
+ }
+ 
+@@ -1017,6 +1030,8 @@ verify_certificate(void *opq, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
+     if (oc_certs_validate_root_cert(crt) < 0) {
+       if (oc_certs_validate_intermediate_cert(crt) < 0) {
+         OC_ERR("failed to verify root or intermediate cert");
++        oc_tls_audit_log("AUTH-1", "DLTS handshake error, failed to verify root or intermediate cert",
++                         0x08, 1, peer);
+         return -1;
+       }
+     } else {
+@@ -1042,6 +1057,8 @@ verify_certificate(void *opq, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
+     }
+   } else if (oc_certs_validate_end_entity_cert(crt) < 0) {
+     OC_ERR("failed to verify end entity cert");
++    oc_tls_audit_log("AUTH-1", "DLTS handshake failed: failed to verify end entity cert",
++                     0x08, 1, peer);
+     return -1;
+   }
+ 
+-- 
+2.16.1.windows.1
+

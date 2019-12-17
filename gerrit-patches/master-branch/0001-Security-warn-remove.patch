@@ -1,0 +1,506 @@
+From bb20b69226adadcf4590e4d9ab16f1b33fb49cfa Mon Sep 17 00:00:00 2001
+From: Oleksandr Dmytrenko <o.dmytrenko@samsung.com>
+Date: Tue, 3 Jul 2018 13:01:23 +0300
+Subject: [PATCH] Security warn remove
+
+Removing compile warnings in security code
+
+Change-Id: Id2e8818920979bb515213a5c36ddc8a3137ae61d
+Signed-off-by: Oleksandr Dmytrenko <o.dmytrenko@samsung.com>
+---
+ port/freertos/config.h   |  1 +
+ port/linux/config.h      |  1 +
+ port/openthread/config.h |  1 +
+ port/riot/config.h       |  1 +
+ port/tizenrt/config.h    |  6 ++++++
+ security/oc_acl.c        | 24 +++++++++++-------------
+ security/oc_cred.c       | 14 +++++++-------
+ security/oc_doxm.c       |  2 --
+ security/oc_pstat.c      |  2 +-
+ security/oc_store.c      | 20 ++++++++++----------
+ security/oc_tls.c        | 29 +++++++++++++++--------------
+ 11 files changed, 54 insertions(+), 47 deletions(-)
+
+diff --git a/port/freertos/config.h b/port/freertos/config.h
+index ca9f0f3a..6a1a1358 100644
+--- a/port/freertos/config.h
++++ b/port/freertos/config.h
+@@ -20,6 +20,7 @@
+ 
+ /* Time resolution */
+ #include <stdint.h>
++#include <strings.h>
+ typedef uint64_t oc_clock_time_t;
+ #define OC_CLOCK_CONF_TICKS_PER_SECOND 1
+ 
+diff --git a/port/linux/config.h b/port/linux/config.h
+index a00351f5..9c34efc7 100644
+--- a/port/linux/config.h
++++ b/port/linux/config.h
+@@ -4,6 +4,7 @@
+ /* Time resolution */
+ #include <stdint.h>
+ #include <time.h>
++#include <strings.h>
+ typedef uint64_t oc_clock_time_t;
+ #define OC_CLOCK_CONF_TICKS_PER_SECOND CLOCKS_PER_SEC
+ 
+diff --git a/port/openthread/config.h b/port/openthread/config.h
+index 5dd38bce..c4105dea 100644
+--- a/port/openthread/config.h
++++ b/port/openthread/config.h
+@@ -19,6 +19,7 @@
+ 
+ /* Time resolution */
+ #include <stdint.h>
++#include <strings.h>
+ typedef uint64_t oc_clock_time_t;
+ /* 1 clock tick = 1ms */
+ #define OC_CLOCK_CONF_TICKS_PER_SECOND (1000)
+diff --git a/port/riot/config.h b/port/riot/config.h
+index 5dd38bce..c4105dea 100644
+--- a/port/riot/config.h
++++ b/port/riot/config.h
+@@ -19,6 +19,7 @@
+ 
+ /* Time resolution */
+ #include <stdint.h>
++#include <strings.h>
+ typedef uint64_t oc_clock_time_t;
+ /* 1 clock tick = 1ms */
+ #define OC_CLOCK_CONF_TICKS_PER_SECOND (1000)
+diff --git a/port/tizenrt/config.h b/port/tizenrt/config.h
+index bd04a592..871634e5 100644
+--- a/port/tizenrt/config.h
++++ b/port/tizenrt/config.h
+@@ -22,6 +22,7 @@
+ /* Time resolution */
+ #include <stdint.h>
+ #include <time.h>
++#include <strings.h>
+ typedef uint64_t oc_clock_time_t;
+ 
+ 
+@@ -87,4 +88,9 @@ typedef uint64_t oc_clock_time_t;
+ 
+ #endif /* !OC_DYNAMIC_ALLOCATION */
+ 
++#ifndef __WINT_TYPE__
++# define __WINT_TYPE__ unsigned int
++#endif
++typedef __WINT_TYPE__ wint_t;
++
+ #endif /* CONFIG_H */
+diff --git a/security/oc_acl.c b/security/oc_acl.c
+index c8bc6f73..40167302 100644
+--- a/security/oc_acl.c
++++ b/security/oc_acl.c
+@@ -31,8 +31,6 @@
+ #include <stdlib.h>
+ #include <string.h>
+ 
+-extern int strncasecmp(const char *s1, const char *s2, size_t n);
+-
+ #ifdef OC_DYNAMIC_ALLOCATION
+ 
+ #include "port/oc_assert.h"
+@@ -80,7 +78,7 @@ oc_sec_get_acl(int device)
+ static bool
+ unique_aceid(int aceid, int device)
+ {
+-  oc_sec_ace_t *ace = oc_list_head(aclist[device].subjects);
++  oc_sec_ace_t *ace = (oc_sec_ace_t *)oc_list_head(aclist[device].subjects);
+   while (ace != NULL) {
+     if (ace->aceid == aceid)
+       return false;
+@@ -261,7 +259,7 @@ static void
+ dump_acl(int device)
+ {
+   oc_sec_acl_t *a = &aclist[device];
+-  oc_sec_ace_t *ace = oc_list_head(a->subjects);
++  oc_sec_ace_t *ace = (oc_sec_ace_t *)oc_list_head(a->subjects);
+   PRINT("\nAccess Control List\n---------\n");
+   while (ace != NULL) {
+     PRINT("\n---------\nAce: %d\n---------\n", ace->aceid);
+@@ -289,7 +287,7 @@ dump_acl(int device)
+     } break;
+     }
+ 
+-    oc_ace_res_t *r = oc_list_head(ace->resources);
++    oc_ace_res_t *r = (oc_ace_res_t *)oc_list_head(ace->resources);
+     PRINT("\nResources:\n");
+     while (r != NULL) {
+       if (oc_string_len(r->href) > 0) {
+@@ -395,7 +393,7 @@ oc_sec_check_acl(oc_method_t method, oc_resource_t *resource,
+     memset(&_auth_crypt, 0, sizeof(oc_ace_subject_t));
+     _auth_crypt.conn = OC_CONN_AUTH_CRYPT;
+     do {
+-      match = oc_sec_acl_find_subject(match, OC_SUBJECT_CONN, &_auth_crypt, -1,
++      match = oc_sec_acl_find_subject(match, OC_SUBJECT_CONN, &_auth_crypt, (oc_ace_wildcard_t)-1,
+                                       0, endpoint->device);
+       if (match) {
+         permission |= oc_ace_get_permission(match, resource);
+@@ -410,7 +408,7 @@ oc_sec_check_acl(oc_method_t method, oc_resource_t *resource,
+   memset(&_anon_clear, 0, sizeof(oc_ace_subject_t));
+   _anon_clear.conn = OC_CONN_ANON_CLEAR;
+   do {
+-    match = oc_sec_acl_find_subject(match, OC_SUBJECT_CONN, &_anon_clear, -1, 0,
++    match = oc_sec_acl_find_subject(match, OC_SUBJECT_CONN, &_anon_clear, (oc_ace_wildcard_t)-1, 0,
+                                     endpoint->device);
+     if (match) {
+       permission |= oc_ace_get_permission(match, resource);
+@@ -452,7 +450,7 @@ oc_sec_encode_acl(int device)
+     oc_core_get_resource_by_index(OCF_SEC_ACL, device));
+ #if !defined(OC_SPEC_VER_OIC)
+   oc_rep_set_array(root, aclist2);
+-  oc_sec_ace_t *sub = oc_list_head(aclist[device].subjects);
++  oc_sec_ace_t *sub = (oc_sec_ace_t *)oc_list_head(aclist[device].subjects);
+ 
+   while (sub != NULL) {
+     oc_rep_object_array_start_item(aclist2);
+@@ -768,7 +766,7 @@ static bool
+ oc_acl_remove_ace(int aceid, int device)
+ {
+   bool removed = false;
+-  oc_sec_ace_t *ace = oc_list_head(aclist[device].subjects), *next = 0;
++  oc_sec_ace_t *ace = (oc_sec_ace_t *)oc_list_head(aclist[device].subjects), *next = 0;
+   while (ace != NULL) {
+     next = ace->next;
+     if (ace->aceid == aceid) {
+@@ -1046,7 +1044,7 @@ oc_sec_decode_acl(oc_rep_t *rep, bool from_storage, int device)
+       oc_rep_t *aclist2 = rep->value.object_array;
+       while (aclist2 != NULL) {
+         oc_ace_subject_t subject;
+-        oc_ace_subject_type_t subject_type = 0;
++        oc_ace_subject_type_t subject_type = OC_SUBJECT_UUID;
+         uint16_t permission = 0;
+         int aceid = -1;
+         oc_rep_t *resources = 0;
+@@ -1118,9 +1116,9 @@ oc_sec_decode_acl(oc_rep_t *rep, bool from_storage, int device)
+           oc_rep_t *resource = resources->value.object;
+           const char *href = 0;
+ #ifdef OC_SERVER
+-          oc_resource_properties_t wc_r = 0;
++          int wc_r = 0;
+ #endif /* OC_SERVER */
+-          oc_interface_mask_t interfaces = 0;
++          int interfaces = 0;
+           oc_string_array_t *rt = 0;
+           int i;
+ 
+@@ -1181,7 +1179,7 @@ oc_sec_decode_acl(oc_rep_t *rep, bool from_storage, int device)
+           }
+ 
+           oc_sec_ace_update_res(subject_type, &subject, aceid, permission, href,
+-                                wc, rt, interfaces, device);
++                                wc, rt, (oc_interface_mask_t)interfaces, device);
+ 
+ #ifdef OC_SERVER
+           if (subject_type == OC_SUBJECT_CONN &&
+diff --git a/security/oc_cred.c b/security/oc_cred.c
+index 48fea453..34f59d52 100644
+--- a/security/oc_cred.c
++++ b/security/oc_cred.c
+@@ -88,7 +88,7 @@ oc_sec_cred_init(void)
+ static bool
+ unique_credid(int credid, int device)
+ {
+-  oc_sec_cred_t *cred = oc_list_head(devices[device].creds);
++  oc_sec_cred_t *cred = (oc_sec_cred_t *)oc_list_head(devices[device].creds);
+   while (cred != NULL) {
+     if (cred->credid == credid)
+       return false;
+@@ -123,7 +123,7 @@ oc_sec_remove_cred(oc_sec_cred_t *cred, int device)
+ static bool
+ oc_sec_remove_cred_by_credid(int credid, int device)
+ {
+-  oc_sec_cred_t *cred = oc_list_head(devices[device].creds);
++  oc_sec_cred_t *cred = (oc_sec_cred_t *)oc_list_head(devices[device].creds);
+   while (cred != NULL) {
+     if (cred->credid == credid) {
+       oc_sec_remove_cred(cred, device);
+@@ -137,7 +137,7 @@ oc_sec_remove_cred_by_credid(int credid, int device)
+ static void
+ oc_sec_clear_creds(int device)
+ {
+-  oc_sec_cred_t *cred = oc_list_head(devices[device].creds), *next;
++  oc_sec_cred_t *cred = (oc_sec_cred_t *)oc_list_head(devices[device].creds), *next;
+   while (cred != NULL) {
+     next = cred->next;
+     oc_sec_remove_cred(cred, device);
+@@ -162,7 +162,7 @@ oc_sec_cred_free(void)
+ oc_sec_cred_t *
+ oc_sec_find_cred(oc_uuid_t *subjectuuid, int device)
+ {
+-  oc_sec_cred_t *cred = oc_list_head(devices[device].creds);
++  oc_sec_cred_t *cred = (oc_sec_cred_t *)oc_list_head(devices[device].creds);
+   while (cred != NULL) {
+     if (memcmp(cred->subjectuuid.id, subjectuuid->id, 16) == 0) {
+       return cred;
+@@ -177,7 +177,7 @@ oc_sec_get_cred(oc_uuid_t *subjectuuid, int device)
+ {
+   oc_sec_cred_t *cred = oc_sec_find_cred(subjectuuid, device);
+   if (cred == NULL) {
+-    cred = oc_memb_alloc(&creds);
++    cred = (oc_sec_cred_t *)oc_memb_alloc(&creds);
+     if (cred != NULL) {
+       memcpy(cred->subjectuuid.id, subjectuuid->id, 16);
+       oc_list_add(devices[device].creds, cred);
+@@ -191,7 +191,7 @@ oc_sec_get_cred(oc_uuid_t *subjectuuid, int device)
+ void
+ oc_sec_encode_cred(bool persist, int device)
+ {
+-  oc_sec_cred_t *cr = oc_list_head(devices[device].creds);
++  oc_sec_cred_t *cr = (oc_sec_cred_t *)oc_list_head(devices[device].creds);
+   char uuid[37];
+   oc_rep_start_root_object();
+   oc_process_baseline_interface(
+@@ -495,7 +495,7 @@ oc_cred_remove_subject(const char *subjectuuid, int device)
+ {
+   oc_uuid_t _subjectuuid;
+   oc_str_to_uuid(subjectuuid, &_subjectuuid);
+-  oc_sec_cred_t *cred = oc_list_head(devices[device].creds), *next = 0;
++  oc_sec_cred_t *cred = (oc_sec_cred_t *)oc_list_head(devices[device].creds), *next = 0;
+   while (cred != NULL) {
+     next = cred->next;
+     if (memcmp(cred->subjectuuid.id, _subjectuuid.id, 16) == 0) {
+diff --git a/security/oc_doxm.c b/security/oc_doxm.c
+index 3d25ced1..13fb03d5 100644
+--- a/security/oc_doxm.c
++++ b/security/oc_doxm.c
+@@ -26,8 +26,6 @@
+ #include <stddef.h>
+ #include <string.h>
+ 
+-extern int strncasecmp(const char *s1, const char *s2, size_t n);
+-
+ #ifdef OC_DYNAMIC_ALLOCATION
+ #include "port/oc_assert.h"
+ #include "util/oc_mem.h"
+diff --git a/security/oc_pstat.c b/security/oc_pstat.c
+index 67c5ade5..07d3cc10 100644
+--- a/security/oc_pstat.c
++++ b/security/oc_pstat.c
+@@ -425,7 +425,7 @@ oc_sec_decode_pstat(oc_rep_t *rep, bool from_storage, int device)
+           case OC_REP_INT: {
+             if (oc_string_len(dos->name) == 1 &&
+                 oc_string(dos->name)[0] == 's') {
+-              ps.s = dos->value.integer;
++              ps.s = (oc_dostype_t)dos->value.integer;
+               transition_state = true;
+             } else {
+               return false;
+diff --git a/security/oc_store.c b/security/oc_store.c
+index f6e5aeeb..79fb0ac6 100644
+--- a/security/oc_store.c
++++ b/security/oc_store.c
+@@ -45,7 +45,7 @@ oc_sec_load_doxm(int device)
+   oc_rep_t *rep;
+ 
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf) {
+     oc_sec_doxm(device, 0);
+     return;
+@@ -90,7 +90,7 @@ oc_sec_load_pstat(int device)
+   oc_rep_t *rep = 0;
+ 
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf) {
+     oc_sec_pstat_default(device);
+     return;
+@@ -136,7 +136,7 @@ oc_sec_load_cred(int device)
+   oc_rep_t *rep;
+ 
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf)
+     return;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+@@ -177,7 +177,7 @@ oc_sec_load_acl(int device)
+   oc_rep_t *rep;
+ 
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf) {
+     oc_sec_acl_default(device);
+     return;
+@@ -215,7 +215,7 @@ void
+ oc_sec_dump_pstat(int device)
+ {
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf)
+     return;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+@@ -241,7 +241,7 @@ void
+ oc_sec_dump_cred(int device)
+ {
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf)
+     return;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+@@ -267,7 +267,7 @@ void
+ oc_sec_dump_doxm(int device)
+ {
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf)
+     return;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+@@ -294,7 +294,7 @@ void
+ oc_sec_dump_acl(int device)
+ {
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf)
+     return;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+@@ -325,7 +325,7 @@ oc_sec_load_unique_ids(int device)
+   oc_device_info_t *device_info = oc_core_get_device_info(device);
+ 
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf) {
+     return;
+   }
+@@ -379,7 +379,7 @@ void
+ oc_sec_dump_unique_ids(int device)
+ {
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  uint8_t *buf = oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
++  uint8_t *buf = (uint8_t *)oc_mem_malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buf)
+     return;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+diff --git a/security/oc_tls.c b/security/oc_tls.c
+index 4a35f825..91b505a6 100644
+--- a/security/oc_tls.c
++++ b/security/oc_tls.c
+@@ -190,7 +190,7 @@ oc_tls_free_peer(oc_tls_peer_t *peer, bool inactivity_cb)
+ static oc_tls_peer_t *
+ oc_tls_get_peer(oc_endpoint_t *endpoint)
+ {
+-  oc_tls_peer_t *peer = oc_list_head(tls_peers);
++  oc_tls_peer_t *peer = (oc_tls_peer_t *)oc_list_head(tls_peers);
+   while (peer != NULL) {
+     if (oc_endpoint_compare(&peer->endpoint, endpoint) == 0) {
+       return peer;
+@@ -278,7 +278,7 @@ ssl_send(void *ctx, const unsigned char *buf, size_t len)
+   oc_tls_peer_t *peer = (oc_tls_peer_t *)ctx;
+   oc_message_t message;
+ #ifdef OC_DYNAMIC_ALLOCATION
+-  message.data = oc_mem_malloc(OC_PDU_SIZE);
++  message.data = (uint8_t *)oc_mem_malloc(OC_PDU_SIZE);
+   if (!message.data)
+     return 0;
+ #endif /* OC_DYNAMIC_ALLOCATION */
+@@ -350,7 +350,7 @@ get_psk_cb(void *data, mbedtls_ssl_context *ssl, const unsigned char *identity,
+   (void)data;
+   (void)identity_len;
+   OC_DBG("oc_tls: In PSK callback");
+-  oc_tls_peer_t *peer = oc_list_head(tls_peers);
++  oc_tls_peer_t *peer = (oc_tls_peer_t *)oc_list_head(tls_peers);
+   while (peer != NULL) {
+     if (&peer->ssl_ctx == ssl) {
+       break;
+@@ -409,7 +409,7 @@ oc_tls_add_peer(oc_endpoint_t *endpoint, int role)
+ {
+   oc_tls_peer_t *peer = oc_tls_get_peer(endpoint);
+   if (!peer) {
+-    peer = oc_memb_alloc(&tls_peers_s);
++    peer = (oc_tls_peer_t *)oc_memb_alloc(&tls_peers_s);
+     if (peer) {
+       OC_DBG("oc_tls: Allocating new peer");
+       memcpy(&peer->endpoint, endpoint, sizeof(oc_endpoint_t));
+@@ -481,10 +481,10 @@ oc_tls_add_peer(oc_endpoint_t *endpoint, int role)
+ void
+ oc_tls_shutdown(void)
+ {
+-  oc_tls_peer_t *p = oc_list_pop(tls_peers);
++  oc_tls_peer_t *p = (oc_tls_peer_t *)oc_list_pop(tls_peers);
+   while (p != NULL) {
+     oc_tls_free_peer(p, false);
+-    p = oc_list_pop(tls_peers);
++    p = (oc_tls_peer_t *)oc_list_pop(tls_peers);
+   }
+ #ifdef OC_CLIENT
+   if (oc_core_get_num_devices() >= 1) {
+@@ -519,6 +519,7 @@ oc_tls_shutdown(void)
+ int
+ oc_tls_init_context(void)
+ {
++  oc_uuid_t *device_id = NULL;
+   if (oc_core_get_num_devices() < 1) {
+     goto dtls_init_err;
+   }
+@@ -575,7 +576,7 @@ oc_tls_init_context(void)
+                                     MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
+       goto dtls_init_err;
+     }
+-    oc_uuid_t *device_id = oc_core_get_device_id(i);
++    device_id = oc_core_get_device_id(i);
+     if (mbedtls_ssl_conf_psk(&server_conf[i], device_id->id, 1, device_id->id,
+                              16) != 0) {
+       goto dtls_init_err;
+@@ -619,7 +620,7 @@ oc_tls_init_context(void)
+                                   MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
+     goto dtls_init_err;
+   }
+-  oc_uuid_t *device_id = oc_core_get_device_id(0);
++  device_id = oc_core_get_device_id(0);
+   if (mbedtls_ssl_conf_psk(&client_conf[0], device_id->id, 1, device_id->id,
+                            16) != 0) {
+     goto dtls_init_err;
+@@ -1241,7 +1242,7 @@ oc_tls_init_connection(oc_message_t *message)
+   oc_tls_peer_t *peer =
+     oc_tls_add_peer(&message->endpoint, MBEDTLS_SSL_IS_CLIENT);
+   if (peer) {
+-    oc_message_t *duplicate = oc_list_head(peer->send_q);
++    oc_message_t *duplicate = (oc_message_t *)oc_list_head(peer->send_q);
+     while (duplicate != NULL) {
+       if (duplicate == message) {
+         break;
+@@ -1477,23 +1478,23 @@ OC_PROCESS_THREAD(oc_tls_handler, ev, data) {
+     OC_PROCESS_YIELD();
+ 
+     if (ev == oc_events[UDP_TO_TLS_EVENT]) {
+-      oc_tls_recv_message(data);
++      oc_tls_recv_message((oc_message_t *)data);
+     }
+ #ifdef OC_CLIENT
+     else if (ev == oc_events[INIT_TLS_CONN_EVENT]) {
+-      oc_tls_init_connection(data);
++      oc_tls_init_connection((oc_message_t *)data);
+     }
+ #endif /* OC_CLIENT */
+     else if (ev == oc_events[RI_TO_TLS_EVENT]) {
+-      oc_tls_send_message(data);
++      oc_tls_send_message((oc_message_t *)data);
+     } else if (ev == OC_PROCESS_EVENT_TIMER) {
+       check_retr_timers();
+     } else if (ev == oc_events[TLS_READ_DECRYPTED_DATA]) {
+-      read_application_data(data);
++      read_application_data((oc_tls_peer_t *)data);
+     }
+ #ifdef OC_CLIENT
+     else if (ev == oc_events[TLS_WRITE_APPLICATION_DATA]) {
+-      write_application_data(data);
++      write_application_data((oc_tls_peer_t *)data);
+     }
+ #endif /* OC_CLIENT */
+   }
+-- 
+2.16.1.windows.1
+

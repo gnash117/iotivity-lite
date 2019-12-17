@@ -1,0 +1,27 @@
+From f205c14d52320de65ca7605c07336c2c73042070 Mon Sep 17 00:00:00 2001
+From: Oleksii Beketov <ol.beketov@samsung.com>
+Date: Fri, 9 Aug 2019 16:16:52 +0300
+Subject: [PATCH] CoAP crash workaround
+
+Change-Id: I4e30b316d504af7505d150064170c291a91eab6e
+Signed-off-by: Oleksii Beketov <ol.beketov@samsung.com>
+---
+ patches/05_mbedtls_ocf-samsung.patch | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/patches/05_mbedtls_ocf-samsung.patch b/patches/05_mbedtls_ocf-samsung.patch
+index 26b532d5..8c84bd94 100644
+--- a/patches/05_mbedtls_ocf-samsung.patch
++++ b/patches/05_mbedtls_ocf-samsung.patch
+@@ -1026,7 +1026,7 @@ index b916cb0..27b3753 100644
+ +    {
+ +        tlen = tlen << 1;
+ +    }
+-+    *buf = mbedtls_calloc( 1, tlen );
+++    *buf = mbedtls_calloc( 1, tlen + 4);
+ +    if( *buf )
+ +    {
+ +        memcpy( *buf, ssl->in.offt, n );
+-- 
+2.16.1.windows.1
+

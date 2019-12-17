@@ -1,0 +1,41 @@
+From 51db357f10b13f5a90169f3b47dd9bdc9aa6a054 Mon Sep 17 00:00:00 2001
+From: Philippe Coval <philippe.coval@osg.samsung.com>
+Date: Fri, 23 Mar 2018 18:12:38 +0100
+Subject: [PATCH] ignore: debian generated files
+
+Testing CI bot:
+
+https://jenkins.iotivity.org/job/iotivity-constrained-verify-tizenrt/
+
+Change-Id: I6eb4f1738f74941c51a12ad736e533f30c5a0496
+Origin: https://gerrit.iotivity.org/gerrit/#/c/24669/
+Signed-off-by: Philippe Coval <philippe.coval@osg.samsung.com>
+---
+ .gitignore | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/.gitignore b/.gitignore
+index c91bbbb3..3eb75354 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,9 @@
++debian/.debhelper/
++debian/files
++debian/*.debhelper.log
++debian/*.substvars
++debian/iotivity-constrained*/
++debian/tmp
+ port/linux/client
+ port/linux/server
+ port/linux/temp_sensor
+@@ -48,6 +54,7 @@ port/openthread/output
+ *.o
+ *.cmd
+ *.tmp
++*~
+ .clang-format
+ _clang-format
+ port/linux/platformtest
+-- 
+2.16.1.windows.1
+

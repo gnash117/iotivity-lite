@@ -1,0 +1,288 @@
+From 63f6c908cdb7c3506c34baf32f32fcb10e0fbad8 Mon Sep 17 00:00:00 2001
+From: George Nash <george.nash@intel.com>
+Date: Wed, 4 Dec 2019 15:02:04 -0800
+Subject: [PATCH] update swig interfaces for fargo
+
+adds new swig interface file oc_enums.i exposes enums and
+functions from oc_enums.h file
+expose:
+ - oc_resource_tag_pos_desc as OCMain.resourceTagPositionDescription
+ - oc_resource_tag_pos_rel as OCMain.resourceTagPositionRelative
+ - oc_resource_tag_func_desc as OCMain.resourceTagFunctionDescription
+
+expose new tag_pos_* properties from oc_resource_t and
+oc_collection_s
+
+Updated windows build and swig makefile to handle new oc_enums.i
+
+Change-Id: Ib91bfbf9c5176b6268e7d55c418b9e4cff4326c0
+Signed-off-by: George Nash <george.nash@intel.com>
+---
+ port/windows/vs2015/IoTivity-lite.vcxproj          |  6 +++++
+ port/windows/vs2015/IoTivity-lite.vcxproj.filters  | 18 +++++++++++++
+ .../iotivity-lite-jni/iotivity-lite-jni.vcxproj    |  2 ++
+ .../iotivity-lite-jni.vcxproj.filters              |  6 +++++
+ .../iotivity-lite-swig/iotivity-lite-swig.vcxproj  |  9 +++++++
+ swig/Makefile                                      |  4 +--
+ swig/swig_interfaces/oc_api.i                      |  4 +++
+ swig/swig_interfaces/oc_collection.i               | 13 +++++++---
+ swig/swig_interfaces/oc_enums.i                    | 30 ++++++++++++++++++++++
+ swig/swig_interfaces/oc_ri.i                       |  6 +++++
+ 10 files changed, 92 insertions(+), 6 deletions(-)
+ create mode 100644 swig/swig_interfaces/oc_enums.i
+
+diff --git a/port/windows/vs2015/IoTivity-lite.vcxproj b/port/windows/vs2015/IoTivity-lite.vcxproj
+index 69018388..f7805dd7 100644
+--- a/port/windows/vs2015/IoTivity-lite.vcxproj
++++ b/port/windows/vs2015/IoTivity-lite.vcxproj
+@@ -218,7 +218,9 @@
+     <ClInclude Include="..\..\..\api\oc_introspection_internal.h" />
+     <ClInclude Include="..\..\..\api\oc_main.h" />
+     <ClInclude Include="..\..\..\api\oc_mnt.h" />
++    <ClInclude Include="..\..\..\api\oc_resource_factory.h" />
+     <ClInclude Include="..\..\..\api\oc_session_events_internal.h" />
++    <ClInclude Include="..\..\..\api\oc_swupdate_internal.h" />
+     <ClInclude Include="..\..\..\deps\tinycbor\src\cbor.h" />
+     <ClInclude Include="..\..\..\deps\tinycbor\src\cborjson.h" />
+     <ClInclude Include="..\..\..\include\oc_acl.h" />
+@@ -235,6 +237,7 @@
+     <ClInclude Include="..\..\..\include\oc_cred.h" />
+     <ClInclude Include="..\..\..\include\oc_discovery.h" />
+     <ClInclude Include="..\..\..\include\oc_endpoint.h" />
++    <ClInclude Include="..\..\..\include\oc_enums.h" />
+     <ClInclude Include="..\..\..\include\oc_helpers.h" />
+     <ClInclude Include="..\..\..\include\oc_introspection.h" />
+     <ClInclude Include="..\..\..\include\oc_network_events.h" />
+@@ -317,15 +320,18 @@
+     <ClCompile Include="..\..\..\api\oc_core_res.c" />
+     <ClCompile Include="..\..\..\api\oc_discovery.c" />
+     <ClCompile Include="..\..\..\api\oc_endpoint.c" />
++    <ClCompile Include="..\..\..\api\oc_enums.c" />
+     <ClCompile Include="..\..\..\api\oc_helpers.c" />
+     <ClCompile Include="..\..\..\api\oc_introspection.c" />
+     <ClCompile Include="..\..\..\api\oc_main.c" />
+     <ClCompile Include="..\..\..\api\oc_mnt.c" />
+     <ClCompile Include="..\..\..\api\oc_network_events.c" />
+     <ClCompile Include="..\..\..\api\oc_rep.c" />
++    <ClCompile Include="..\..\..\api\oc_resource_factory.c" />
+     <ClCompile Include="..\..\..\api\oc_ri.c" />
+     <ClCompile Include="..\..\..\api\oc_server_api.c" />
+     <ClCompile Include="..\..\..\api\oc_session_events.c" />
++    <ClCompile Include="..\..\..\api\oc_swupdate.c" />
+     <ClCompile Include="..\..\..\api\oc_uuid.c" />
+     <ClCompile Include="..\..\..\deps\mbedtls\library\aes.c" />
+     <ClCompile Include="..\..\..\deps\mbedtls\library\aesni.c" />
+diff --git a/port/windows/vs2015/IoTivity-lite.vcxproj.filters b/port/windows/vs2015/IoTivity-lite.vcxproj.filters
+index da70cee2..fd6bf5ee 100644
+--- a/port/windows/vs2015/IoTivity-lite.vcxproj.filters
++++ b/port/windows/vs2015/IoTivity-lite.vcxproj.filters
+@@ -448,6 +448,15 @@
+     <ClCompile Include="..\..\..\deps\mbedtls\library\platform_util.c">
+       <Filter>mbedTLS</Filter>
+     </ClCompile>
++    <ClCompile Include="..\..\..\api\oc_enums.c">
++      <Filter>Core</Filter>
++    </ClCompile>
++    <ClCompile Include="..\..\..\api\oc_resource_factory.c">
++      <Filter>Core</Filter>
++    </ClCompile>
++    <ClCompile Include="..\..\..\api\oc_swupdate.c">
++      <Filter>Core</Filter>
++    </ClCompile>
+   </ItemGroup>
+   <ItemGroup>
+     <ClInclude Include="..\..\..\deps\tinycbor\src\cbor.h">
+@@ -711,6 +720,15 @@
+     <ClInclude Include="..\mutex.h">
+       <Filter>Port</Filter>
+     </ClInclude>
++    <ClInclude Include="..\..\..\api\oc_resource_factory.h">
++      <Filter>Core</Filter>
++    </ClInclude>
++    <ClInclude Include="..\..\..\api\oc_swupdate_internal.h">
++      <Filter>Core</Filter>
++    </ClInclude>
++    <ClInclude Include="..\..\..\include\oc_enums.h">
++      <Filter>Headers</Filter>
++    </ClInclude>
+   </ItemGroup>
+   <ItemGroup>
+     <Filter Include="mbedTLS">
+diff --git a/port/windows/vs2015/iotivity-lite-jni/iotivity-lite-jni.vcxproj b/port/windows/vs2015/iotivity-lite-jni/iotivity-lite-jni.vcxproj
+index 6d8cc285..9ef1e921 100644
+--- a/port/windows/vs2015/iotivity-lite-jni/iotivity-lite-jni.vcxproj
++++ b/port/windows/vs2015/iotivity-lite-jni/iotivity-lite-jni.vcxproj
+@@ -267,9 +267,11 @@ del $(SolutionDir)..\..\..\swig\iotivity-lite-java\src\org\iotivity\oc\*.java</C
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_clock_wrap.c" />
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_cloud_wrap.c" />
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_collection_wrap.c" />
++    <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_connectivity_wrap.c" />
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_core_res_wrap.c" />
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_cred_wrap.c" />
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_endpoint_wrap.c" />
++    <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_enums_wrap.c" />
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_introspection_wrap.c" />
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_iotivity_lite_jni.c" />
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_obt_wrap.c" />
+diff --git a/port/windows/vs2015/iotivity-lite-jni/iotivity-lite-jni.vcxproj.filters b/port/windows/vs2015/iotivity-lite-jni/iotivity-lite-jni.vcxproj.filters
+index 707f0685..20ad281f 100644
+--- a/port/windows/vs2015/iotivity-lite-jni/iotivity-lite-jni.vcxproj.filters
++++ b/port/windows/vs2015/iotivity-lite-jni/iotivity-lite-jni.vcxproj.filters
+@@ -49,6 +49,12 @@
+     <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_cred_wrap.c">
+       <Filter>c_wrap</Filter>
+     </ClCompile>
++    <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_connectivity_wrap.c">
++      <Filter>c_wrap</Filter>
++    </ClCompile>
++    <ClCompile Include="..\..\..\..\swig\iotivity-lite-java\jni\oc_enums_wrap.c">
++      <Filter>c_wrap</Filter>
++    </ClCompile>
+   </ItemGroup>
+   <ItemGroup>
+     <Text Include="ReadMe.txt" />
+diff --git a/port/windows/vs2015/iotivity-lite-swig/iotivity-lite-swig.vcxproj b/port/windows/vs2015/iotivity-lite-swig/iotivity-lite-swig.vcxproj
+index 0beefe51..1b784ecd 100644
+--- a/port/windows/vs2015/iotivity-lite-swig/iotivity-lite-swig.vcxproj
++++ b/port/windows/vs2015/iotivity-lite-swig/iotivity-lite-swig.vcxproj
+@@ -314,6 +314,15 @@ xcopy /s /y /d /q $(SolutionDir)..\..\..\swig\oc_java\oc\*.java $(SolutionDir)..
+       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)../../../swig/iotivity-lite-java/jni/%(Filename)_wrap.c;</Outputs>
+       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)../../../swig/iotivity-lite-java/jni/%(Filename)_wrap.c;</Outputs>
+     </CustomBuild>
++    <CustomBuild Include="..\..\..\..\swig\swig_interfaces\oc_enums.i">
++      <FileType>Document</FileType>
++      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">swig -java -package org.iotivity -outdir $(SolutionDir)../../../swig/iotivity-lite-java/src/org/iotivity/ -D_WIN32 -I$(SolutionDir)../../.. -I$(SolutionDir)../../../port/windows -I$(SolutionDir)../../../include/ -o $(SolutionDir)../../../swig/iotivity-lite-java/jni/%(Filename)_wrap.c %(Identity)</Command>
++      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">swig -java -package org.iotivity -outdir $(SolutionDir)../../../swig/iotivity-lite-java/src/org/iotivity/ -D_WIN32 -I$(SolutionDir)../../.. -I$(SolutionDir)../../../port/windows -I$(SolutionDir)../../../include/ -o $(SolutionDir)../../../swig/iotivity-lite-java/jni/%(Filename)_wrap.c %(Identity)</Command>
++      <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Building SWIG %(Identity) interface</Message>
++      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Building SWIG %(Identity) interface</Message>
++      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)../../../swig/iotivity-lite-java/jni/%(Filename)_wrap.c;</Outputs>
++      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)../../../swig/iotivity-lite-java/jni/%(Filename)_wrap.c;</Outputs>
++    </CustomBuild>
+     <None Include="..\..\..\..\swig\swig_interfaces\oc_ri.i">
+       <FileType>Document</FileType>
+       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">swig -java -package org.iotivity -outdir $(SolutionDir)../../../swig/iotivity-lite-java/src/org/iotivity/ -D_WIN32 -I$(SolutionDir)../../.. -I$(SolutionDir)../../../port/windows -I$(SolutionDir)../../../include/ -o $(SolutionDir)../../../swig/iotivity-lite-java/jni/%(Filename)_wrap.c %(Identity)</Command>
+diff --git a/swig/Makefile b/swig/Makefile
+index 7bf3dab4..e7aa33d7 100644
+--- a/swig/Makefile
++++ b/swig/Makefile
+@@ -93,8 +93,8 @@ ifeq ($(TCP),1)
+ endif
+ 
+ SRC = oc_api oc_buffer_settings oc_clock oc_cloud oc_collection oc_connectivity \
+-		oc_core_res oc_cred oc_endpoint oc_introspection oc_obt oc_pki oc_rep \
+-		oc_session_events oc_storage oc_uuid
++		oc_core_res oc_cred oc_endpoint oc_enums oc_introspection oc_obt oc_pki \
++		oc_rep oc_session_events oc_storage oc_uuid
+ 
+ # Swig interfaces source
+ SWIG_INTERFACE_SRC = $(addsuffix .i, $(SRC))
+diff --git a/swig/swig_interfaces/oc_api.i b/swig/swig_interfaces/oc_api.i
+index b9204c77..58a3d900 100644
+--- a/swig/swig_interfaces/oc_api.i
++++ b/swig/swig_interfaces/oc_api.i
+@@ -13,6 +13,7 @@
+ %import "oc_endpoint.i"
+ %import "oc_rep.i"
+ %import "oc_uuid.i"
++%import "oc_enums.i"
+ 
+ %pragma(java) jniclasscode=%{
+   static {
+@@ -531,6 +532,9 @@ void jni_reset_device(size_t device) {
+ %rename(resourceSetDefaultInterface) oc_resource_set_default_interface;
+ %rename(resourceBindResourceType) oc_resource_bind_resource_type;
+ %rename(deviceBindResourceType) oc_device_bind_resource_type;
++%rename(resourceTagPositionDescription) oc_resource_tag_pos_desc;
++%rename(resourceTagPositionRelative) oc_resource_tag_pos_rel;
++%rename(resourceTagFunctionDescription) oc_resource_tag_func_desc;
+ %rename(processBaselineInterface) oc_process_baseline_interface;
+ 
+ // DOCUMENTATION workaround
+diff --git a/swig/swig_interfaces/oc_collection.i b/swig/swig_interfaces/oc_collection.i
+index 56a06419..1be3ca93 100644
+--- a/swig/swig_interfaces/oc_collection.i
++++ b/swig/swig_interfaces/oc_collection.i
+@@ -1,11 +1,13 @@
+ /* File oc_api.i */
+ %module OCCollectionUtil
+ 
+-%include "stdint.i"
+-%include iotivity.swg
++%include "stdint.i";
++%include "arrays_java.i";
++%include "iotivity.swg";
+ 
+-%import oc_ri.i
+-%import oc_uuid.i
++%import "oc_ri.i";
++%import "oc_uuid.i";
++%import "oc_enums.i";
+ 
+ %{
+ #include "oc_collection.h"
+@@ -29,6 +31,9 @@ typedef struct oc_collection_s oc_collection_t;
+ %ignore oc_collection_s::delete_handler;
+ %ignore oc_collection_s::get_properties;
+ %ignore oc_collection_s::set_properties;
++%rename(tagPositionRelative) oc_collection_s::tag_pos_rel;
++%rename(tagPositionDescription) oc_collection_s::tag_pos_desc;
++%rename(tagPositionFunction) oc_collection_s::tag_pos_func;
+ %rename (numLinks) oc_collection_s::num_links;
+ %ignore oc_collection_s::OC_LIST_STRUCT(mandatory_rts);
+ // TODO convert to array of strings.
+diff --git a/swig/swig_interfaces/oc_enums.i b/swig/swig_interfaces/oc_enums.i
+new file mode 100644
+index 00000000..2b2ec623
+--- /dev/null
++++ b/swig/swig_interfaces/oc_enums.i
+@@ -0,0 +1,30 @@
++/* File oc_enums.i */
++%module OCEnumUtil
++
++%include "enums.swg"
++%javaconst(1);
++
++%pragma(java) jniclasscode=%{
++  static {
++    try {
++        System.loadLibrary("iotivity-lite-jni");
++    } catch (UnsatisfiedLinkError e) {
++      System.err.println("Native code library failed to load. \n" + e);
++      System.exit(1);
++    }
++  }
++%}
++
++%{
++#include "oc_enums.h"
++%}
++
++%rename(OCEnum) oc_enum_t;
++%rename("%(strip:[OC_ENUM_])s", %isenumitem) "";
++%rename(OCPositionDescription) oc_pos_description_t;
++%rename("%(strip:[OC_POS_])s", %isenumitem) "";
++
++%rename(enumToString) oc_enum_to_str;
++%rename(positionDescriptionToString) oc_enum_pos_desc_to_str;
++
++%include "oc_enums.h"
+diff --git a/swig/swig_interfaces/oc_ri.i b/swig/swig_interfaces/oc_ri.i
+index 6eea912b..c39544b3 100644
+--- a/swig/swig_interfaces/oc_ri.i
++++ b/swig/swig_interfaces/oc_ri.i
+@@ -54,6 +54,12 @@
+ %ignore oc_resource_s::delete_handler;
+ %ignore oc_resource_s::get_properties;
+ %ignore oc_resource_s::set_properties;
++%rename(tagPositionRelative) oc_resource_s::tag_pos_rel;
++%immutable oc_resource_s::tag_pos_rel;
++%rename(tagPositionDescription) oc_resource_s::tag_pos_desc;
++%immutable oc_resource_s::tag_pos_desc;
++%rename(tagFunctionDescription) oc_resource_s::tag_func_desc;
++%immutable oc_resource_s::tag_func_desc;
+ %rename("%(lowercamelcase)s") num_observers;
+ %immutable oc_resource_s::num_observers;
+ %rename("%(lowercamelcase)s") num_links;
+-- 
+2.16.1.windows.1
+

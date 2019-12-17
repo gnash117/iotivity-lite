@@ -1,0 +1,43 @@
+From ff4fc298bdde31c0e2689a37e4fb307a2ade0a1b Mon Sep 17 00:00:00 2001
+From: Oleksii Beketov <ol.beketov@samsung.com>
+Date: Fri, 7 Dec 2018 18:23:42 +0200
+Subject: [PATCH] Prevent session drop
+
+Avoid remove peer on receiving alert message
+
+Change-Id: I3d5af05ec32d9b3d94247094d13b69f76729e9f4
+Signed-off-by: Oleksii Beketov <ol.beketov@samsung.com>
+---
+ security/oc_tls.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/security/oc_tls.c b/security/oc_tls.c
+index 0b7e5e59..08ec0549 100644
+--- a/security/oc_tls.c
++++ b/security/oc_tls.c
+@@ -1530,6 +1530,9 @@ read_application_data(oc_tls_peer_t *peer)
+     int ret = 0;
+     do {
+       ret = mbedtls_ssl_handshake_step(&peer->ssl_ctx);
++      if (ret == MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE) {
++        return;
++      }
+       if (peer->ssl_ctx.state == MBEDTLS_SSL_CLIENT_CHANGE_CIPHER_SPEC ||
+           peer->ssl_ctx.state == MBEDTLS_SSL_SERVER_CHANGE_CIPHER_SPEC) {
+         memcpy(peer->master_secret, peer->ssl_ctx.session_negotiate->master,
+@@ -1661,6 +1664,12 @@ read_application_data(oc_tls_peer_t *peer)
+       int ret = mbedtls_ssl_read(&peer->ssl_ctx, decrypt_data, OC_PDU_SIZE);
+ #endif /* !OC_DYNAMIC_ALLOCATION */
+       if (ret <= 0) {
++        if (ret == MBEDTLS_ERR_SSL_WANT_READ &&
++            peer->ssl_ctx.in.msgtype == MBEDTLS_SSL_MSG_HANDSHAKE) {
++          mbedtls_ssl_session_reset(&peer->ssl_ctx);
++          oc_tls_free_peer(peer, false);
++          return;
++        }
+         oc_message_unref(message);
+         if (ret == 0 || ret == MBEDTLS_ERR_SSL_WANT_READ ||
+             ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+-- 
+2.16.1.windows.1
+

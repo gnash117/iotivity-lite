@@ -1,0 +1,22 @@
+From 47ae8f763f107418bcca4322b2cb47ff93b8b6b4 Mon Sep 17 00:00:00 2001
+From: pilli manikanta <p.manikanta@partner.samsung.com>
+Date: Fri, 23 Nov 2018 19:26:15 +0530
+Subject: [PATCH] Dummy commit
+
+Change-Id: I90a5a08b0c9539122ebcf420f6e27fe03ccb1b54
+Signed-off-by: pilli manikanta <p.manikanta@partner.samsung.com>
+---
+ abondone.txt | 1 +
+ 1 file changed, 1 insertion(+)
+ create mode 100644 abondone.txt
+
+diff --git a/abondone.txt b/abondone.txt
+new file mode 100644
+index 00000000..91dd6352
+--- /dev/null
++++ b/abondone.txt
+@@ -0,0 +1 @@
++Abondoning this patch
+-- 
+2.16.1.windows.1
+

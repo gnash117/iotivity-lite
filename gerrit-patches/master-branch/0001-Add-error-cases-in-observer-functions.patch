@@ -1,0 +1,56 @@
+From f1a9627c3de1c59de398060688b7ddc27143ae51 Mon Sep 17 00:00:00 2001
+From: iot <rami.jung@samsung.com>
+Date: Tue, 10 Jul 2018 16:01:12 +0900
+Subject: [PATCH] Add error cases in observer functions
+
+Enhance the functionalities of notify_observers()
+  oc_notify_observers()
+  coap_nocoap_notify_observers()
+
+0 and positive number : successful
+negative number       : failed
+
+Change-Id: Ie58b09ed0d41ff609cae109a7e0dbaa5cd081c82
+Signed-off-by: iot <rami.jung@samsung.com>
+---
+ api/oc_ri.c              | 2 +-
+ messaging/coap/observe.c | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/api/oc_ri.c b/api/oc_ri.c
+index 2c6ff4e8..7139a792 100644
+--- a/api/oc_ri.c
++++ b/api/oc_ri.c
+@@ -451,7 +451,7 @@ periodic_observe_handler(void *data)
+ {
+   oc_resource_t *resource = (oc_resource_t *)data;
+ 
+-  if (coap_notify_observers(resource, NULL, NULL)) {
++  if (coap_notify_observers(resource, NULL, NULL) > 0) {
+     return OC_EVENT_CONTINUE;
+   }
+ 
+diff --git a/messaging/coap/observe.c b/messaging/coap/observe.c
+index 6eb9314b..a38718a2 100644
+--- a/messaging/coap/observe.c
++++ b/messaging/coap/observe.c
+@@ -257,7 +257,7 @@ coap_notify_observers(oc_resource_t *resource,
+ {
+   if (!resource) {
+     OC_WRN("coap_notify_observers: no resource passed; returning");
+-    return 0;
++    return -1;
+   }
+ 
+   int num_observers = 0;
+@@ -277,6 +277,7 @@ coap_notify_observers(oc_resource_t *resource,
+   uint8_t *buffer = malloc(OC_MAX_APP_DATA_SIZE);
+   if (!buffer) {
+     OC_WRN("coap_notify_observers: out of memory allocating buffer");
++    num_observers = -1;
+     goto leave_notify_observers;
+   }
+ #endif /* OC_DYNAMIC_ALLOCATION */
+-- 
+2.16.1.windows.1
+

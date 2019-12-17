@@ -1,0 +1,3888 @@
+From f10d53156d813aaf414f63b9a3735773d61f621a Mon Sep 17 00:00:00 2001
+From: Bhargava C S <cs.bhargava@samsung.com>
+Date: Wed, 13 Nov 2019 16:34:41 +0530
+Subject: [PATCH] Easysetup Enrollee
+
+  - WiFi Easysetup Enrolle Framework
+  - WiFi Enrolle Test Application
+  - ESIM Easysetup Enrolee Framework
+  - ESIM Enrolle Test Application
+  - LPA Stub
+
+Change-Id: I08796cc995e3d6ecf83524edbc837db256f66f30
+Signed-off-by: Bhargava C S <cs.bhargava@samsung.com>
+---
+ api/easysetup/es_common.h                |  166 +++++
+ api/easysetup/es_utils.c                 |  207 ++++++
+ api/easysetup/es_utils.h                 |  218 ++++++
+ api/easysetup/oc_easysetup_enrollee.c    | 1100 ++++++++++++++++++++++++++++++
+ api/oc_core_res.c                        |   37 +-
+ apps/euicc_easysetup_enrollee.c          |  394 +++++++++++
+ apps/wifi_easysetup_enrollee.c           |  333 +++++++++
+ deps/lpa/oc_lpa_api.c                    |   73 ++
+ deps/lpa/oc_lpa_api.h                    |   60 ++
+ include/oc_easysetup_enrollee.h          |  784 +++++++++++++++++++++
+ include/oc_ri.h                          |    8 +-
+ port/freertos/Makefile                   |    2 +-
+ port/linux/Makefile                      |   67 +-
+ port/linux/iotivity-lite-easysetup.pc.in |   25 +
+ port/linux/oc_config.h                   |    3 +-
+ port/linux/wifi.c                        |   81 +++
+ port/linux/wifi.h                        |   31 +
+ port/tizenrt/Makefile                    |    1 +
+ 18 files changed, 3547 insertions(+), 43 deletions(-)
+ create mode 100755 api/easysetup/es_common.h
+ create mode 100755 api/easysetup/es_utils.c
+ create mode 100755 api/easysetup/es_utils.h
+ create mode 100755 api/easysetup/oc_easysetup_enrollee.c
+ create mode 100755 apps/euicc_easysetup_enrollee.c
+ create mode 100755 apps/wifi_easysetup_enrollee.c
+ create mode 100755 deps/lpa/oc_lpa_api.c
+ create mode 100755 deps/lpa/oc_lpa_api.h
+ create mode 100755 include/oc_easysetup_enrollee.h
+ create mode 100644 port/linux/iotivity-lite-easysetup.pc.in
+ create mode 100755 port/linux/wifi.c
+ create mode 100755 port/linux/wifi.h
+
+diff --git a/api/easysetup/es_common.h b/api/easysetup/es_common.h
+new file mode 100755
+index 00000000..2f61876b
+--- /dev/null
++++ b/api/easysetup/es_common.h
+@@ -0,0 +1,166 @@
++/****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++#ifndef _ES_COMMON_H_
++#define _ES_COMMON_H_
++
++#include "stdint.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++
++#define OC_STRING_MAX_VALUE 128
++#define OC_URI_STRING_MAX_VALUE 256
++#define MAX_WEBLINKLEN 3
++#define NUM_WIFIMODE 10
++#define NUM_WIFIFREQ 5
++#define NUM_CONNECT_TYPE 4
++#define NUM_WIFIAUTHTYPE 4
++#define NUM_WIFIENCTYPE 6
++
++/**
++ * Attributes used to form a proper easysetup conforming JSON message.
++ */
++ // WiFi Easy Setup
++#define OC_RSRVD_WES_PROVSTATUS "ps"
++#define OC_RSRVD_WES_LAST_ERRORCODE "lec"
++#define OC_RSRVD_WES_CONNECT "cn"
++#define OC_RSRVD_WES_LINKS "links"
++// WiFi Conf
++#define OC_RSRVD_WES_SUPPORTEDWIFIMODE "swmt"
++#define OC_RSRVD_WES_SUPPORTEDWIFIFREQ "swf"
++#define OC_RSRVD_WES_SSID "tnn"
++#define OC_RSRVD_WES_CRED "cd"
++#define OC_RSRVD_WES_AUTHTYPE "wat"
++#define OC_RSRVD_WES_ENCTYPE "wet"
++#define OC_RSRVD_WES_SUPPORTEDWIFIAUTHTYPE "swat"
++#define OC_RSRVD_WES_SUPPORTEDWIFIENCTYPE "swet"
++// Device Conf
++#define OC_RSRVD_WES_DEVNAME "dn"
++
++ // Esim Easy Setup
++#define OC_RSRVD_EES_PROVSTATUS "ps"
++#define OC_RSRVD_EES_LASTERRORREASON "ler"
++#define OC_RSRVD_EES_LASTERRORCODE "lec"
++#define OC_RSRVD_EES_LASTERRORRDESCRIPTION "led"
++#define OC_RSRVD_EES_ENDUSERCONFIRMATION "euc"
++#define OC_RSRVD_EES_LINKS "links"
++// RSP Conf
++#define OC_RSRVD_EES_ACTIVATIONCODE "ac"
++#define OC_RSRVD_EES_PROFMETADATA "pm"
++#define OC_RSRVD_EES_CONFIRMATIONCODE "cc"
++#define OC_RSRVD_EES_CONFIRMATIONCODEREQUIRED "ccr"
++// RSP Cap Conf
++#define OC_RSRVD_EES_EUICCINFO "euiccinfo"
++#define OC_RSRVD_EES_DEVICEINFO "deviceinfo"
++
++// Esim Easysetup procedure status
++#define EES_PS_NONE "None"
++#define EES_PS_INITED "Inited"
++#define EES_PS_USER_CONF_PENDING "User_Confirmation_Pending"
++#define EES_PS_CONFIRM_RECEIVED "User_Confirmation_Received"
++#define EES_PS_DOWNLOADED "Profile_Downloaded"
++#define EES_PS_INSTALLED "Profile_Installed"
++#define EES_PS_ERROR "Error"
++
++/**
++ * @brief  Supported WI-FI frequency like 2.4G and 5G.
++ */
++typedef enum {
++  WIFI_24G = 0,  // 2.4G
++  WIFI_5G,       // 5G
++  WIFI_BOTH,     // 2.4G and 5G
++  WIFI_FREQ_NONE // EOF
++} wifi_freq;
++
++/**
++ * @brief  Supported WI-FI mode like 802.11g and 802.11n.
++ */
++typedef enum {
++  WIFI_11A = 0, // 802.11a
++  WIFI_11B,     // 802.11b
++  WIFI_11G,     // 802.11g
++  WIFI_11N,     // 802.11n
++  WIFI_11AC,    // 802.11ac
++  WIFI_11AD,    // 802.11ad
++  WIFI_EOF = 999
++} wifi_mode;
++
++/**
++ * @brief  WI-FI Authentication tlype of the Enroller.
++ */
++typedef enum {
++  NONE_AUTH = 0, // NO authentication
++  WEP,           // WEP
++  WPA_PSK,       // WPA-PSK
++  WPA2_PSK       // WPA2-PSK
++} wifi_authtype;
++
++/**
++ * @brief  WI-FI encryption type of the Enroller.
++ */
++typedef enum {
++  NONE_ENC = 0, // NO encryption
++  WEP_64,       // WEP-64
++  WEP_128,      // WEP-128
++  TKIP,         // TKIP
++  AES,          // AES
++  TKIP_AES      // TKIP-AES
++} wifi_enctype;
++
++typedef enum {
++  RSP_NONE = 0,
++  RSP_INITIATED,
++  USER_CONF_PENDING,
++  PROFILE_DOWNLOADED,
++  PROFILE_INSTALLED,
++  RSP_ERROR
++} rsp_state;
++
++typedef enum {
++  EUC_NONE = 0,
++  NO_INPUT,
++  DOWNLOAD_REJECTED,
++  DONALOAD_POSTPONED,
++  DOWNLOAD_OK,
++  DOWNLOAD_ENABLE_OK
++} user_confirmation;
++
++/**
++ * Easysetup defined resoruce types and uris.
++ */
++#define OC_RSRVD_WES_RES_TYPE_EASYSETUP "oic.r.easysetup"
++#define OC_RSRVD_WES_URI_EASYSETUP "/EasySetupResURI"
++#define OC_RSRVD_WES_RES_TYPE_WIFICONF "oic.r.wificonf"
++#define OC_RSRVD_WES_URI_WIFICONF "/WiFiConfResURI"
++#define OC_RSRVD_WES_RES_TYPE_DEVCONF "oic.r.devconf"
++#define OC_RSRVD_WES_URI_DEVCONF "/DevConfResURI"
++
++#define OC_RSRVD_EES_RES_TYPE_ESIMEASYSETUP "oic.r.esimeasysetup"
++#define OC_RSRVD_EES_URI_ESIMEASYSETUP "/EsimEasySetupResURI"
++#define OC_RSRVD_EES_RES_TYPE_RSPCONF "oic.r.rspconf"
++#define OC_RSRVD_EES_URI_RSPCONF "/RSPConfResURI"
++#define OC_RSRVD_EES_RES_TYPE_RSPCAPCONF "oic.r.rspcapabilityconf"
++#define OC_RSRVD_EES_URI_RSPCAPCONF "/RSPCapabilityConfResURI"
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* _ES_COMMON_H_ */
+diff --git a/api/easysetup/es_utils.c b/api/easysetup/es_utils.c
+new file mode 100755
+index 00000000..c03f502c
+--- /dev/null
++++ b/api/easysetup/es_utils.c
+@@ -0,0 +1,207 @@
++/* ****************************************************************
++ *
++ * Copyright 2019 Samsung Electronics All Rights Reserved.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++#include <string.h>
++#include "oc_helpers.h"
++#include "es_common.h"
++
++// Helper to convert Enum to String (char*) value (by searching it in the lookup table)
++#define lookup_enum_tostr(val, lut, ret) \
++{ \
++    ret = NULL; \
++    const size_t n = sizeof(lut) / sizeof(lut[0]); \
++    for (size_t i = 0; i < n; ++i) \
++    { \
++        if (lut[i].val_enum == val) \
++        { \
++            ret = lut[i].val_str; \
++            break; \
++        } \
++    } \
++}
++
++// Helper to convert String (char*) to Enum value (by searching it in the lookup table)
++#define lookup_str_toenum(val_in, lut, val_out, result) \
++{ \
++    result = false; \
++    const size_t n = sizeof(lut) / sizeof(lut[0]); \
++    for (size_t i = 0; i < n; ++i) \
++    { \
++        if (strcmp(lut[i].val_str, val_in) == 0) \
++        { \
++            val_out = lut[i].val_enum; \
++            result = true; \
++            break; \
++        } \
++    } \
++}
++
++static const struct
++{
++    wifi_mode val_enum;
++    char *val_str;
++} WIFIMODE_CONVERT_LOOKUP[] =
++{
++    { WIFI_11A, "A" },
++    { WIFI_11B, "B" },
++    { WIFI_11G, "G" },
++    { WIFI_11N, "N" },
++    { WIFI_11AC, "AC" },
++};
++
++static const struct
++{
++    wifi_freq val_enum;
++    char *val_str;
++} WIFIFREQ_CONVERT_LOOKUP[] =
++{
++    { WIFI_24G, "2.4G" },
++    { WIFI_5G, "5G"}
++};
++
++static const struct
++{
++    wifi_authtype val_enum;
++    char *val_str;
++} WIFIAUTHTYPE_CONVERT_LOOKUP[] =
++{
++    { NONE_AUTH, "None" },
++    { WEP, "WEP"},
++    { WPA_PSK, "WPA_PSK" },
++    { WPA2_PSK, "WPA2_PSK" },
++};
++
++static const struct
++{
++    wifi_enctype val_enum;
++    char *val_str;
++} WIFIENCTYPE_CONVERT_LOOKUP[] =
++{
++    { NONE_ENC, "None" },
++    { WEP_64, "WEP_64" },
++    { WEP_128, "WEP_128" },
++    { TKIP, "TKIP" },
++    { AES, "AES" },
++    { TKIP_AES, "TKIP_AES" },
++};
++
++static const struct
++{
++    rsp_state val_enum;
++    char *val_str;
++} RSP_STATE_LOOKUP[] =
++{
++    { RSP_NONE, "NONE" },
++    { RSP_INITIATED, "RSP_INITIATED" },
++    { USER_CONF_PENDING, "USER_CONFIRMATION_PENDING" },
++    { PROFILE_DOWNLOADED, "PROFILE_DOWNLOADED" },
++    { PROFILE_INSTALLED, "PROFILE_INSTALLED" },
++    { RSP_ERROR, "ERROR" },
++};
++
++static const struct
++{
++    user_confirmation val_enum;
++    char *val_str;
++} USER_CONFIRMATION_LOOKUP[] =
++{
++    { EUC_NONE, "NONE" },
++    { NO_INPUT, "NO_INPUT" },
++    { DOWNLOAD_REJECTED, "DOWNLOAD_REJECTED" },
++    { DONALOAD_POSTPONED, "DONALOAD_POSTPONED" },
++    { DOWNLOAD_OK, "DOWNLOAD_OK" },
++    { DOWNLOAD_ENABLE_OK, "DOWNLOAD_ENABLE_OK" },
++};
++
++const char*
++wifi_mode_enum_tostring(wifi_mode val)
++{
++    char *ret = NULL;
++    lookup_enum_tostr(val, WIFIMODE_CONVERT_LOOKUP, ret);
++    return ret;
++}
++
++const char*
++wifi_freq_enum_tostring(wifi_freq val)
++{
++    char *ret = NULL;
++    lookup_enum_tostr(val, WIFIFREQ_CONVERT_LOOKUP, ret);
++    return ret;
++}
++
++const char*
++wifi_authtype_enum_tostring(wifi_authtype val)
++{
++    char *ret = NULL;
++    lookup_enum_tostr(val, WIFIAUTHTYPE_CONVERT_LOOKUP, ret);
++    return ret;
++}
++
++bool
++wifi_authtype_string_toenum(const char *val, wifi_authtype *val_out)
++{
++    bool result = false;
++    lookup_str_toenum(val, WIFIAUTHTYPE_CONVERT_LOOKUP, (*val_out), result);
++    return result;
++}
++
++const char*
++wifi_enctype_enum_tostring(wifi_enctype val)
++{
++    char *ret = NULL;
++    lookup_enum_tostr(val, WIFIENCTYPE_CONVERT_LOOKUP, ret);
++    return ret;
++}
++
++bool wifi_enctype_string_toenum(const char *val, wifi_enctype *val_out)
++{
++    bool result = false;
++    lookup_str_toenum(val, WIFIENCTYPE_CONVERT_LOOKUP, (*val_out), result);
++    return result;
++}
++
++const char*
++rsp_state_enum_tostring(rsp_state val)
++{
++    char *ret = NULL;
++    lookup_enum_tostr(val, RSP_STATE_LOOKUP, ret);
++    return ret;
++}
++
++bool
++rsp_state_string_toenum(const char *val, rsp_state *val_out)
++{
++    bool result = false;
++    lookup_str_toenum(val, RSP_STATE_LOOKUP, (*val_out), result);
++    return result;
++}
++
++const char*
++euc_state_enum_tostring(user_confirmation val)
++{
++    char *ret = NULL;
++    lookup_enum_tostr(val, USER_CONFIRMATION_LOOKUP, ret);
++    return ret;
++}
++
++bool
++euc_state_string_toenum(const char *val, user_confirmation *val_out)
++{
++    bool result = false;
++    lookup_str_toenum(val, USER_CONFIRMATION_LOOKUP, (*val_out), result);
++    return result;
++}
+diff --git a/api/easysetup/es_utils.h b/api/easysetup/es_utils.h
+new file mode 100755
+index 00000000..11ed5fab
+--- /dev/null
++++ b/api/easysetup/es_utils.h
+@@ -0,0 +1,218 @@
++/* ****************************************************************
++ *
++ * Copyright 2019 Samsung Electronics All Rights Reserved.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++
++#ifndef _ES_UTILS_H_
++#define _ES_UTILS_H_
++
++#include <string.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#define MEM_ALLOC_CHECK(mem)                                                   \
++  do {                                                                         \
++    if (!mem) {                                                                \
++      OC_ERR("Memory allocation failed!");                                     \
++      goto exit;                                                               \
++    }                                                                          \
++  } while (0)
++
++#define INPUT_PARAM_NULL_CHECK(in)                                             \
++  do {                                                                         \
++    if (!in) {                                                                 \
++      OC_ERR("Invalid input!");                                                \
++      goto exit;                                                               \
++    }                                                                          \
++  } while (0)
++
++#define NULL_CHECK(p, mes)                                                     \
++  do {                                                                         \
++    if (!p) {                                                                  \
++      OC_ERR(mes);                                                             \
++      goto exit;                                                               \
++    }                                                                          \
++  } while (0)
++
++#define RESOURCE_CHECK(r) NULL_CHECK(r, "Failed to create resource!")
++#define RESOURCE_LINK_CHECK(r) NULL_CHECK(r, "Failed to create link!")
++
++#define es_rep_set_boolean(object, key, value)                                 \
++  oc_rep_set_boolean(object, key, value)
++
++#define es_rep_set_int(object, key, value) oc_rep_set_int(object, key, value)
++
++#define es_rep_set_text_string(object, key, value)                             \
++  do {                                                                         \
++    if (value)                                                                 \
++      oc_rep_set_text_string(object, key, value);                              \
++  } while (0);
++
++#define es_rep_set_text_string_with_keystr(object, key, value)                 \
++  do {                                                                         \
++    if (value) {                                                               \
++      g_err |= cbor_encode_text_string(&object##_map, key, strlen(key));       \
++      g_err |= cbor_encode_text_string(&object##_map, value, strlen(value));   \
++    }                                                                          \
++  } while (0);
++
++#define es_rep_set_int_with_keystr(object, key, value)                         \
++  do {                                                                         \
++    if (value) {                                                               \
++      g_err |= cbor_encode_text_string(&object##_map, key, strlen(key));       \
++      g_err |= cbor_encode_int(&object##_map, value);                          \
++    }                                                                          \
++  } while (0);
++
++#define es_rep_set_boolean_with_keystr(object, key, value)                     \
++  do {                                                                         \
++    if (value) {                                                               \
++      g_err |= cbor_encode_text_string(&object##_map, key, strlen(key));       \
++      g_err |= cbor_encode_boolean(&object##_map, value);                      \
++    }                                                                          \
++  } while (0);
++
++#define es_free_string(str)                                                    \
++  if (oc_string_len(str) > 0)                                                  \
++    oc_free_string(&str);
++
++void
++es_new_string(oc_string_t *des_string, char *src_string)
++{
++  if (!des_string || (!src_string || strlen(src_string) == 0)) {
++    return;
++  }
++
++  if (oc_string_len(*des_string) == 0) {
++    oc_new_string(des_string, src_string, strlen(src_string));
++  } else if (oc_string_len(*des_string) == strlen(src_string)) {
++    strncpy(oc_string(*des_string), src_string, strlen(src_string));
++  } else {
++    oc_free_string(des_string);
++    oc_new_string(des_string, src_string, strlen(src_string));
++  }
++}
++
++/**
++ * Some type conversion helpers
++ * For all *enum_tostring(...) functions: They take the Enum Type Value as input (val), and return
++ * the corresponding string representation, which conforms to the OCF specification.
++ * For all *string_toenum(...) functions: They take the string representation, as per the OCF
++ * specification as input (val_in). And return the Enum Value in val_out. If conversion fails,
++ * false is returned by the function.
++ */
++
++/**
++ * convert wifi mode value to related string representation
++ *
++ * @param val Enum Type Value as input
++ *
++ * @return corresponding string representation
++ */
++const char* wifi_mode_enum_tostring(wifi_mode val);
++
++/**
++ * convert wifi freq value to related string representation
++ *
++ * @param val Enum Type Value as input
++ *
++ * @return corresponding string representation
++ */
++const char* wifi_freq_enum_tostring(wifi_freq val);
++
++/**
++ * convert wifi auth type value to related string representation
++ *
++ * @param val Enum Type Value as input
++ *
++ * @return corresponding string representation
++ */
++const char* wifi_authtype_enum_tostring(wifi_authtype val);
++
++/**
++ * convert string representation to Enum value
++ *
++ * @param val     string representation
++ * @param val_out  return the Enum Value in val_out
++ *
++ * @return result as true or false
++ */
++bool wifi_authtype_string_toenum(const char *val, wifi_authtype *val_out);
++
++/**
++ * convert wifi enc type value to related string representation
++ *
++ * @param val Enum Type Value as input
++ *
++ * @return corresponding string representation
++ */
++const char* wifi_enctype_enum_tostring(wifi_enctype val);
++
++/**
++ * convert string representation to Enum value
++ *
++ * @param val     string representation
++ * @param val_out  return the Enum Value in val_out
++ *
++ * @return result as true or false
++ */
++bool wifi_enctype_string_toenum(const char *val, wifi_enctype *val_out);
++
++/**
++ * convert wifi enc type value to related string representation
++ *
++ * @param val Enum Type Value as input
++ *
++ * @return corresponding string representation
++ */
++const char* rsp_state_enum_tostring(rsp_state val);
++
++/**
++ * convert string representation to Enum value
++ *
++ * @param val     string representation
++ * @param val_out  return the Enum Value in val_out
++ *
++ * @return result as true or false
++ */
++bool rsp_state_string_toenum(const char *val, rsp_state *val_out);
++
++/**
++ * convert wifi enc type value to related string representation
++ *
++ * @param val Enum Type Value as input
++ *
++ * @return corresponding string representation
++ */
++const char* euc_state_enum_tostring(user_confirmation val);
++
++/**
++ * convert string representation to Enum value
++ *
++ * @param val     string representation
++ * @param val_out  return the Enum Value in val_out
++ *
++ * @return result as true or false
++ */
++bool euc_state_string_toenum(const char *val, user_confirmation *val_out);
++
++#ifdef __cplusplus
++}
++#endif /* __cplusplus */
++
++#endif // _ES_UTILS_H_
+diff --git a/api/easysetup/oc_easysetup_enrollee.c b/api/easysetup/oc_easysetup_enrollee.c
+new file mode 100755
+index 00000000..2224dcdd
+--- /dev/null
++++ b/api/easysetup/oc_easysetup_enrollee.c
+@@ -0,0 +1,1100 @@
++/****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++#include "oc_helpers.h"
++#include "oc_rep.h"
++#include "oc_config.h"
++#include "oc_easysetup_enrollee.h"
++#include "oc_api.h"
++#include "oc_core_res.h"
++#include "oc_log.h"
++#include "es_utils.h"
++
++#define OC_MAX_NUM_DEVICES	10
++
++#ifdef OC_WIFI_EASYSETUP
++
++typedef struct
++{
++  oc_collection_t *handle;
++  struct
++  {
++    oc_es_connect_type_t connect_request[NUM_CONNECT_TYPE];
++    int num_request;
++    oc_wes_enrollee_state_t state;
++    oc_wes_error_code_t last_err_code;
++  } data;
++  oc_wes_prov_cb_t prov_cb;
++} oc_wes_resource_t;
++
++#define es_res_cast(p) (oc_wes_resource_t *)(p)
++
++typedef struct
++{
++  oc_resource_t *handle;
++  struct
++  {
++    oc_string_t ssid;
++    oc_string_t cred;
++    wifi_authtype auth_type;
++    wifi_enctype enc_type;
++    wifi_mode supported_mode[NUM_WIFIMODE];
++    uint8_t num_mode;
++    wifi_freq supported_freq;
++    wifi_authtype supported_authtype[NUM_WIFIAUTHTYPE];
++    uint8_t num_supported_authtype;
++    wifi_enctype supported_enctype[NUM_WIFIENCTYPE];
++    uint8_t num_supported_enctype;
++  } data;
++  oc_wes_wifi_prov_cb_t prov_cb;
++} oc_wes_wifi_conf_resource_t;
++
++#define wifi_res_cast(p) (oc_wes_wifi_conf_resource_t *)(p)
++
++typedef struct
++{
++  oc_resource_t *handle;
++  struct
++  {
++    oc_string_t dev_name;
++  } data;
++  oc_wes_dev_prov_cb_t prov_cb;
++} oc_wes_dev_conf_resource_t;
++
++#define dev_res_cast(p) (oc_wes_dev_conf_resource_t *)(p)
++
++typedef struct
++{
++  oc_wes_resource_t wes;
++  oc_wes_wifi_conf_resource_t wifi;
++  oc_wes_dev_conf_resource_t device;
++  oc_es_read_userdata_cb_t read_cb;
++  oc_es_write_userdata_cb_t write_cb;
++  oc_es_free_userdata_cb_t free_cb;
++} oc_wifi_enrollee_t;
++
++// Global WiFi Enrolee Instance
++oc_wifi_enrollee_t g_wifi_enrollee[OC_MAX_NUM_DEVICES];
++
++oc_wifi_enrollee_t *get_wifi_device_context(size_t device)
++{
++  return &g_wifi_enrollee[device];
++}
++
++oc_es_result_t
++oc_wes_set_device_info(size_t device, oc_wes_device_info_t *device_info)
++{
++  int modeIdx = 0;
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(device);
++
++  dev_cxt->wifi.data.supported_freq = (device_info->WiFi).supported_freq;
++
++  while ((device_info->WiFi).supported_mode[modeIdx] != WIFI_EOF) {
++    dev_cxt->wifi.data.supported_mode[modeIdx] =
++      (device_info->WiFi).supported_mode[modeIdx];
++    modeIdx++;
++  }
++
++  dev_cxt->wifi.data.num_mode = modeIdx;
++  oc_notify_observers(dev_cxt->wifi.handle);
++
++  es_new_string(&(dev_cxt->device.data.dev_name),
++               oc_string((device_info->Device).device_name));
++  oc_notify_observers(dev_cxt->device.handle);
++  return OC_ES_OK;
++}
++
++oc_es_result_t
++oc_wes_set_error_code(size_t device, oc_wes_error_code_t err_code)
++{
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(device);
++
++  if (err_code < OC_WES_NO_ERROR || err_code > OC_WES_UNKNOWN_ERROR) {
++    OC_ERR("Invalid lec to set: %d", err_code);
++    return OC_ES_ERROR;
++  }
++
++  dev_cxt->wes.data.last_err_code = err_code;
++  oc_notify_observers((oc_resource_t *)dev_cxt->wes.handle);
++  return OC_ES_OK;
++}
++
++oc_es_result_t
++oc_wes_set_state(size_t device, oc_wes_enrollee_state_t es_state)
++{
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(device);
++
++  if (es_state < OC_WES_INIT || es_state >= OC_WES_EOF) {
++    OC_ERR("Invalid oc_es_set_state to set: %d", es_state);
++    return OC_ES_ERROR;
++  }
++
++  dev_cxt->wes.data.state = es_state;
++  oc_notify_observers((oc_resource_t *)dev_cxt->wes.handle);
++  return OC_ES_OK;
++}
++
++oc_wes_enrollee_state_t
++oc_wes_get_state(size_t device)
++{
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(device);
++  return dev_cxt->wes.data.state;
++}
++
++oc_es_result_t oc_wes_set_resource_callbacks(size_t device, oc_wes_prov_cb_t wes_prov_cb,
++	oc_wes_wifi_prov_cb_t wifi_prov_cb, oc_wes_dev_prov_cb_t dev_prov_cb)
++{
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(device);
++
++  dev_cxt->wes.prov_cb = wes_prov_cb;
++  dev_cxt->wifi.prov_cb = wifi_prov_cb;
++  dev_cxt->device.prov_cb = dev_prov_cb;
++
++  return OC_ES_OK;
++}
++
++oc_es_result_t oc_wes_set_userdata_callbacks(size_t device, oc_es_read_userdata_cb_t readcb,
++	oc_es_write_userdata_cb_t writecb, oc_es_free_userdata_cb_t freecb)
++{
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(device);
++
++  dev_cxt->read_cb = readcb;
++  dev_cxt->write_cb = writecb;
++  dev_cxt->free_cb = freecb;
++
++  return OC_ES_OK;
++}
++
++static void
++construct_response_of_wificonf(oc_request_t *request)
++{
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(request->origin->device);
++
++  oc_rep_start_root_object();
++  oc_process_baseline_interface(dev_cxt->wifi.handle);
++
++  oc_rep_set_array(root, swmt);
++  for (int i = 0; i < dev_cxt->wifi.data.num_mode; i++) {
++#ifdef OC_SPEC_VER_OIC
++  // Follow Easy Setup Resource Model prior to OCF 1.3 spec.
++  oc_rep_add_int(swmt, (int)dev_cxt->wifi.data.supported_mode[i]);
++#else
++  // Follow Easy Setup Resource Model OCF 1.3 spec onwards.
++  oc_rep_add_text_string(swmt, wifi_mode_enum_tostring(dev_cxt->wifi.data.supported_mode[i]));
++#endif  // OC_SPEC_VER_OIC
++  }
++
++  oc_rep_close_array(root, swmt);
++
++#ifdef OC_SPEC_VER_OIC
++  // Follow Easy Setup Resource Model prior to OCF 1.3 spec.
++  es_rep_set_int(root, swf, (int)dev_cxt->wifi.data.supported_freq);
++#else
++  // Follow Easy Setup Resource Model OCF 1.3 spec onwards.
++  oc_rep_set_array(root, swf);
++
++  switch(dev_cxt->wifi.data.supported_freq) {
++     case WIFI_24G:
++     case WIFI_5G :
++       oc_rep_add_text_string(swf, wifi_freq_enum_tostring(dev_cxt->wifi.data.supported_freq));
++       break;
++     case WIFI_BOTH:
++       oc_rep_add_text_string(swf, wifi_freq_enum_tostring(WIFI_24G));
++       oc_rep_add_text_string(swf, wifi_freq_enum_tostring(WIFI_5G));
++       break;
++     case WIFI_FREQ_NONE:
++       break;
++  }
++  oc_rep_close_array(root, swf);
++#endif  // OC_SPEC_VER_OIC
++
++  es_rep_set_text_string(root, tnn, oc_string(dev_cxt->wifi.data.ssid));
++  es_rep_set_text_string(root, cd, oc_string(dev_cxt->wifi.data.cred));
++
++#ifdef OC_SPEC_VER_OIC
++  // Follow Easy Setup Resource Model prior to OCF 1.3 spec.
++  es_rep_set_int(root, wat, (int)dev_cxt->wifi.data.auth_type);
++  es_rep_set_int(root, wet, (int)dev_cxt->wifi.data.enc_type);
++#else
++  // Follow Easy Setup Resource Model OCF 1.3 spec onwards.
++  es_rep_set_text_string(root, wat, wifi_authtype_enum_tostring(dev_cxt->wifi.data.auth_type));
++  es_rep_set_text_string(root, wet, wifi_enctype_enum_tostring(dev_cxt->wifi.data.enc_type));
++
++  // new properties in OCF 1.3 - swat and swet.
++  oc_rep_set_array(root, swat);
++  for (int i = 0; i < dev_cxt->wifi.data.num_supported_authtype; i++) {
++    oc_rep_add_text_string(swat, wifi_mode_enum_tostring(dev_cxt->wifi.data.supported_authtype[i]));
++  }
++  oc_rep_close_array(root, swat);
++
++  oc_rep_set_array(root, swet);
++  for (int i = 0; i < dev_cxt->wifi.data.num_supported_enctype; i++) {
++    oc_rep_add_text_string(swet, wifi_mode_enum_tostring(dev_cxt->wifi.data.supported_enctype[i]));
++  }
++  oc_rep_close_array(root, swet);
++#endif  // OC_SPEC_VER_OIC
++  oc_rep_end_root_object();
++}
++
++static void
++wificonf_get_handler(oc_request_t *request, oc_interface_mask_t interface, void *user_data)
++{
++  (void)user_data;
++  OC_DBG("GET request received");
++
++  if (interface != OC_IF_BASELINE) {
++    OC_ERR("Resource does not support this interface: %d", interface);
++    oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    return;
++  }
++
++  construct_response_of_wificonf(request);
++  oc_send_response(request, OC_STATUS_OK);
++}
++
++static void
++update_wifi_conf_resource(oc_request_t *request)
++{
++  bool res_changed = false;
++  oc_wes_wifi_data_t wifi_cb_data;
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(request->origin->device);
++
++  {
++    char *str_val = NULL;
++    size_t str_len = 0;
++    if (oc_rep_get_string(request->request_payload, OC_RSRVD_WES_SSID, &str_val,
++                          &str_len)) {
++      es_new_string(&(dev_cxt->wifi.data.ssid), str_val);
++      res_changed = true;
++    }
++
++    str_val = NULL;
++    str_len = 0;
++    if (oc_rep_get_string(request->request_payload, OC_RSRVD_WES_CRED, &str_val,
++                          &str_len)) {
++      es_new_string(&(dev_cxt->wifi.data.cred), str_val);
++      res_changed = true;
++    }
++  }
++
++  {
++#ifdef OC_SPEC_VER_OIC
++    // Follow Easy Setup Resource Model prior to OCF 1.3 spec.
++    int64_t int_val = 0;
++    if (oc_rep_get_int(request->request_payload, OC_RSRVD_WES_AUTHTYPE,
++                       &int_val)) {
++      dev_cxt->wifi.data.auth_type = int_val;
++      res_changed = true;
++    }
++
++    if (oc_rep_get_int(request->request_payload, OC_RSRVD_WES_ENCTYPE,
++                       &int_val)) {
++      dev_cxt->wifi.data.enc_type = int_val;
++      res_changed = true;
++    }
++#else
++    // Follow Easy Setup Resource Model OCF 1.3 spec onwards.
++    char *str_val = NULL;
++    size_t str_len = 0;
++    if (oc_rep_get_string(request->request_payload, OC_RSRVD_WES_AUTHTYPE, &str_val,
++                          &str_len)) {
++      wifi_authtype_string_toenum(str_val, &dev_cxt->wifi.data.auth_type);
++      res_changed = true;
++    }
++
++    if (oc_rep_get_string(request->request_payload, OC_RSRVD_WES_ENCTYPE, &str_val,
++                          &str_len)) {
++      wifi_enctype_string_toenum(str_val, &dev_cxt->wifi.data.enc_type);
++      res_changed = true;
++    }
++#endif  // OC_SPEC_VER_OIC
++  }
++
++  memcpy(&wifi_cb_data, &dev_cxt->wifi.data, sizeof(oc_wes_wifi_data_t));
++  wifi_cb_data.userdata = NULL;
++
++  if (res_changed && dev_cxt->wifi.prov_cb) {
++    // Trigger provisioning callback
++    dev_cxt->wifi.prov_cb(&wifi_cb_data);
++    // Notify observers about data change
++    oc_notify_observers(dev_cxt->wifi.handle);
++  }
++}
++
++static void
++wificonf_post_handler(oc_request_t *request, oc_interface_mask_t interface, void *user_data)
++{
++  (void)user_data;
++  OC_DBG("POST request received");
++
++  if (interface != OC_IF_BASELINE) {
++    OC_ERR("Resource does not support this interface: %d", interface);
++    oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    return;
++  }
++
++  update_wifi_conf_resource(request);
++  construct_response_of_wificonf(request);
++  oc_send_response(request, OC_STATUS_CHANGED);
++}
++
++static void
++construct_response_of_devconf(oc_request_t *request)
++{
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(request->origin->device);
++
++  oc_rep_start_root_object();
++  oc_process_baseline_interface(dev_cxt->device.handle);
++  es_rep_set_text_string(root, dn, oc_string(dev_cxt->device.data.dev_name));
++
++  oc_rep_end_root_object();
++}
++
++static void
++devconf_get_handler(oc_request_t *request, oc_interface_mask_t interface,
++            void *user_data)
++{
++  (void)user_data;
++  OC_DBG("GET request received");
++
++  if (interface != OC_IF_BASELINE) {
++    OC_ERR("Resource does not support this interface: %d", interface);
++    oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    return;
++  }
++
++  construct_response_of_devconf(request);
++  oc_send_response(request, OC_STATUS_OK);
++}
++
++static void
++update_devconf_resource(oc_request_t *request)
++{
++  bool res_changed = false;
++  char *str_val = NULL;
++  size_t str_len = 0;
++  oc_wes_device_data_t dev_cb_data;
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(request->origin->device);
++
++  if (oc_rep_get_string(request->request_payload, OC_RSRVD_WES_DEVNAME, &str_val,
++                        &str_len)) {
++    es_new_string(&(dev_cxt->device.data.dev_name), str_val);
++    res_changed = true;
++  }
++
++  memcpy(&dev_cb_data, &dev_cxt->device.data, sizeof(oc_wes_device_data_t));
++  dev_cb_data.userdata = NULL;
++
++  if (res_changed && dev_cxt->device.prov_cb) {
++    // Trigger provisioning callback
++    dev_cxt->device.prov_cb(&dev_cb_data);
++    // Notify observers about data change
++    oc_notify_observers(dev_cxt->device.handle);
++  }
++}
++
++static void
++devconf_post_handler(oc_request_t *request, oc_interface_mask_t interface,
++             void *user_data)
++{
++  (void)user_data;
++  OC_DBG("POST request received");
++
++  if (interface != OC_IF_BASELINE) {
++    OC_ERR("Resource does not support this interface: %d", interface);
++    oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    return;
++  }
++
++  update_devconf_resource(request);
++  construct_response_of_devconf(request);
++  oc_send_response(request, OC_STATUS_CHANGED);
++}
++
++void
++get_wes_properties(oc_resource_t *resource, oc_interface_mask_t iface_mask,
++                        void *data)
++{
++  (void)data;
++  oc_collection_t *wes = (oc_collection_t *)resource;
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(wes->device);
++
++  oc_rep_start_root_object();
++
++  switch (iface_mask) {
++  case OC_IF_BASELINE:
++    es_rep_set_int(root, ps, dev_cxt->wes.data.state);
++    es_rep_set_int(root, lec, dev_cxt->wes.data.last_err_code);
++    break;
++  default:
++    break;
++  }
++  oc_rep_end_root_object();
++}
++
++bool
++set_wes_properties(oc_resource_t *resource, oc_rep_t *rep, void *data)
++{
++  (void)data;
++  int64_t int_val = 0;
++  int64_t *connect_req;
++  size_t connect_req_size;
++  oc_wes_data_t cb_data;
++  oc_collection_t *wes = (oc_collection_t *)resource;
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(wes->device);
++
++  while (rep != NULL) {
++    switch (rep->type) {
++      case OC_REP_INT_ARRAY:
++        if (oc_rep_get_int_array(rep, OC_RSRVD_WES_CONNECT,
++                                 &connect_req, &connect_req_size)) {
++          memset(dev_cxt->wes.data.connect_request, 0, sizeof(dev_cxt->wes.data.connect_request));
++          dev_cxt->wes.data.num_request = 0;
++          size_t i;
++
++          for (i = 0; i < NUM_CONNECT_TYPE && i < connect_req_size; ++i) {
++            if (connect_req[i] == OC_ES_CONNECT_WIFI ||
++                connect_req[i] == OC_ES_CONNECT_COAPCLOUD) {
++              dev_cxt->wes.data.connect_request[dev_cxt->wes.data.num_request++] =
++                connect_req[i];
++            }
++          }
++        }
++        break;
++      case OC_REP_INT:
++	  if (oc_rep_get_int(rep, OC_RSRVD_WES_PROVSTATUS, &int_val)) {
++	    dev_cxt->wes.data.state = int_val;
++	  }
++	  if (oc_rep_get_int(rep, OC_RSRVD_WES_LAST_ERRORCODE, &int_val)) {
++	    dev_cxt->wes.data.last_err_code = int_val;
++	  }
++  	  break;
++      default:
++        break;
++    }
++    rep = rep->next;
++  }
++
++  // Trigger application callback
++  if (dev_cxt->wes.prov_cb) {
++    memcpy(&cb_data, &dev_cxt->wes.data, sizeof(oc_wes_data_t));
++    cb_data.userdata = NULL;
++    dev_cxt->wes.prov_cb(&cb_data);
++  }
++  oc_notify_observers((oc_resource_t *)dev_cxt->wes.handle);
++  return true;
++}
++
++void
++oc_create_wifi_easysetup_resource(size_t device)
++{
++  OC_DBG("oc_create_wifi_easysetup_resource : %d", device);
++
++#ifdef OC_DYNAMIC_ALLOCATION
++  assert(device <  OC_MAX_NUM_DEVICES);
++#endif
++
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(device);
++
++  dev_cxt->wes.data.state = OC_WES_INIT;
++  dev_cxt->wes.data.last_err_code = OC_WES_NO_ERROR;
++
++  for (int i = 0; i < NUM_CONNECT_TYPE; ++i) {
++    dev_cxt->wes.data.connect_request[i] = OC_ES_CONNECT_NONE;
++  }
++  dev_cxt->wes.data.num_request = 0;
++
++  //Easy Setup Resource
++  oc_core_populate_collection(
++    OCF_WES,
++    device,
++    OC_RSRVD_WES_URI_EASYSETUP,
++    OC_DISCOVERABLE | OC_SECURE,
++    2,
++    OC_RSRVD_WES_RES_TYPE_EASYSETUP,
++    "oic.wk.col");
++
++  dev_cxt->wes.handle =
++  	 (oc_collection_t *)oc_core_get_resource_by_index(OCF_WES, device);
++
++  dev_cxt->wifi.data.supported_freq = WIFI_BOTH;
++  dev_cxt->wifi.data.supported_mode[0] = WIFI_11A;
++  dev_cxt->wifi.data.supported_mode[1] = WIFI_11B;
++  dev_cxt->wifi.data.supported_mode[2] = WIFI_11G;
++  dev_cxt->wifi.data.supported_mode[3] = WIFI_11N;
++  dev_cxt->wifi.data.num_mode = 4;
++  dev_cxt->wifi.data.auth_type = NONE_AUTH;
++  dev_cxt->wifi.data.enc_type = NONE_ENC;
++
++#ifndef OC_SPEC_VER_OIC  // Spec Version is OCF 1.3 or more.
++  dev_cxt->wifi.data.num_supported_authtype = NUM_WIFIAUTHTYPE;
++  dev_cxt->wifi.data.supported_authtype[0] = NONE_AUTH;
++  dev_cxt->wifi.data.supported_authtype[1] = WEP;
++  dev_cxt->wifi.data.supported_authtype[2] = WPA_PSK;
++  dev_cxt->wifi.data.supported_authtype[3] = WPA2_PSK;
++
++  dev_cxt->wifi.data.num_supported_enctype = NUM_WIFIENCTYPE;
++  dev_cxt->wifi.data.supported_enctype[0] = NONE_ENC;
++  dev_cxt->wifi.data.supported_enctype[1] = WEP_64;
++  dev_cxt->wifi.data.supported_enctype[2] = WEP_128;
++  dev_cxt->wifi.data.supported_enctype[3] = TKIP;
++  dev_cxt->wifi.data.supported_enctype[4] = AES;
++  dev_cxt->wifi.data.supported_enctype[5] = TKIP_AES;
++#endif  // OC_SPEC_VER_OIC
++
++  oc_resource_set_properties_cbs((oc_resource_t *)dev_cxt->wes.handle, get_wes_properties, NULL,
++                                 set_wes_properties, NULL);
++
++  //Wifi Conf Recource
++  oc_core_populate_resource(
++    OCF_WES_WIFI,
++    device,
++    OC_RSRVD_WES_URI_WIFICONF,
++    OC_IF_RW | OC_IF_BASELINE,
++    OC_IF_RW,
++    OC_SECURE | OC_DISCOVERABLE | OC_OBSERVABLE,
++    wificonf_get_handler,
++    0,
++    wificonf_post_handler,
++    0,
++    1,
++    OC_RSRVD_WES_RES_TYPE_WIFICONF);
++
++  dev_cxt->wifi.handle  = oc_core_get_resource_by_index(OCF_WES_WIFI, device);
++  oc_link_t *l1 = oc_new_link(dev_cxt->wifi.handle);
++  oc_collection_add_link((oc_resource_t *)dev_cxt->wes.handle, l1);
++
++  // Device Conf Resource
++  oc_core_populate_resource(
++    OCF_WES_DEVICE,
++    device,
++    OC_RSRVD_WES_URI_DEVCONF,
++    OC_IF_RW | OC_IF_BASELINE,
++    OC_IF_RW,
++    OC_SECURE | OC_DISCOVERABLE | OC_OBSERVABLE,
++    devconf_get_handler,
++    0,
++    devconf_post_handler,
++    0,
++    1,
++    OC_RSRVD_WES_RES_TYPE_DEVCONF);
++
++  dev_cxt->device.handle  = oc_core_get_resource_by_index(OCF_WES_DEVICE, device);
++  oc_link_t *l2 = oc_new_link(dev_cxt->device.handle);
++  oc_collection_add_link((oc_resource_t *)dev_cxt->wes.handle, l2);
++}
++
++void
++oc_delete_wifi_easysetup_resource(size_t device)
++{
++  OC_DBG("oc_delete_wifi_easysetup_resource : %d", device);
++  oc_wifi_enrollee_t *dev_cxt = get_wifi_device_context(device);
++
++  // dev_cxt->wifi.handle freed during core shutdown
++  es_free_string(dev_cxt->wifi.data.ssid);
++  es_free_string(dev_cxt->wifi.data.cred);
++  dev_cxt->wifi.prov_cb = NULL;
++
++  // dev_cxt->device.handle freed during core shutdown
++  es_free_string(dev_cxt->device.data.dev_name);
++  dev_cxt->device.prov_cb = NULL;
++
++  if (dev_cxt->wes.handle) {
++    oc_delete_collection((oc_resource_t *)dev_cxt->wes.handle);
++    dev_cxt->wes.handle = NULL;
++  }
++  dev_cxt->wes.prov_cb = NULL;
++}
++
++#endif //OC_WIFI_EASYSETUP
++
++#ifdef OC_ESIM_EASYSETUP
++
++typedef struct
++{
++  oc_collection_t *handle;
++  // This structure is synced with oc_es_connect_request
++  struct
++  {
++    oc_string_t rsp_status;
++    oc_string_t last_err_reason;
++    oc_string_t last_err_code;
++    oc_string_t last_err_desc;
++    oc_string_t end_user_conf;
++  } data;
++  oc_ees_prov_cb_t prov_cb;
++} oc_ees_resource_t;
++
++#define ees_res_cast(p) (oc_ees_resource_t *)(p)
++
++typedef struct
++{
++  oc_resource_t *handle;
++  struct
++  {
++    oc_string_t activation_code;
++    oc_string_t profile_metadata;
++    oc_string_t confirm_code;
++    bool confirm_code_required;
++  } data;
++  oc_ees_rsp_prov_cb_t prov_cb;
++} oc_ees_rsp_conf_resource_t;
++
++#define rsp_res_cast(p) (oc_ees_rsp_conf_resource_t *)(p)
++
++typedef struct
++{
++  oc_resource_t *handle;
++  struct
++  {
++    oc_string_t euicc_info;
++    oc_string_t device_info;
++  } data;
++  oc_ees_rspcap_prov_cb_t prov_cb;
++} oc_ees_rspcap_conf_resource_t;
++
++#define rspcap_res_cast(p) (oc_ees_rspcap_conf_resource_t *)(p)
++
++typedef struct
++{
++  oc_ees_resource_t ees;
++  oc_ees_rsp_conf_resource_t rsp;
++  oc_ees_rspcap_conf_resource_t rsp_cap;
++  oc_es_read_userdata_cb_t read_cb;
++  oc_es_write_userdata_cb_t write_cb;
++  oc_es_free_userdata_cb_t free_cb;
++} oc_esim_enrollee_t;
++
++// Global eSIM Enrolee Instance
++oc_esim_enrollee_t g_esim_enrollee[OC_MAX_NUM_DEVICES];
++
++oc_esim_enrollee_t *get_esim_device_context(size_t device)
++{
++  return &g_esim_enrollee[device];
++}
++
++oc_es_result_t
++oc_ees_set_device_info(size_t device, oc_ees_device_info_t *device_info)
++{
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(device);
++
++  es_new_string(&(dev_cxt->rsp_cap.data.euicc_info),
++                oc_string((device_info->LPA).euicc_info));
++  es_new_string(&(dev_cxt->rsp_cap.data.device_info),
++                oc_string((device_info->LPA).device_info));
++
++  // Nofity euicc, device details to Mediator. Upon receving these details, Mediator will read eUICC Info and device info from Enrollee
++  oc_notify_observers(dev_cxt->rsp_cap.handle);
++
++  return OC_ES_OK;
++}
++
++oc_es_result_t
++oc_ees_set_error_code(size_t device, oc_string_t err_code)
++{
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(device);
++
++  es_new_string(&(dev_cxt->ees.data.last_err_code), oc_string(err_code));
++  oc_notify_observers((oc_resource_t *)dev_cxt->ees.handle);
++
++  return OC_ES_OK;
++}
++
++/* Easy setup states can be reused for WES and EES.
++    In case of EES, Operator server plays enroller role */
++oc_es_result_t
++oc_ees_set_state(size_t device, oc_string_t es_status)
++{
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(device);
++
++  es_new_string(&(dev_cxt->ees.data.rsp_status), oc_string(es_status));
++
++  oc_notify_observers((oc_resource_t *)dev_cxt->ees.handle);
++  return OC_ES_OK;
++}
++
++oc_string_t
++oc_ees_get_state(size_t device)
++{
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(device);
++  return dev_cxt->ees.data.rsp_status;
++}
++
++oc_es_result_t oc_ees_set_resource_callbacks(size_t device, oc_ees_prov_cb_t ees_prov_cb,
++	oc_ees_rsp_prov_cb_t rsp_prov_cb, oc_ees_rspcap_prov_cb_t rspcap_prov_cb)
++{
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(device);
++
++  dev_cxt->ees.prov_cb = ees_prov_cb;
++  dev_cxt->rsp.prov_cb = rsp_prov_cb;
++  dev_cxt->rsp_cap.prov_cb = rspcap_prov_cb;
++
++  return OC_ES_OK;
++}
++
++oc_es_result_t oc_ees_set_userdata_callbacks(size_t device, oc_es_read_userdata_cb_t readcb,
++	oc_es_write_userdata_cb_t writecb, oc_es_free_userdata_cb_t freecb)
++{
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(device);
++
++  dev_cxt->read_cb = readcb;
++  dev_cxt->write_cb = writecb;
++  dev_cxt->free_cb = freecb;
++
++  return OC_ES_OK;
++}
++
++static void
++construct_response_of_rspconf(oc_request_t *request)
++{
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(request->origin->device);
++
++  oc_rep_start_root_object();
++  oc_process_baseline_interface(dev_cxt->rsp.handle);
++  es_rep_set_text_string(root, ac, oc_string(dev_cxt->rsp.data.activation_code));
++  es_rep_set_text_string(root, pm, oc_string(dev_cxt->rsp.data.profile_metadata));
++  es_rep_set_text_string(root, cc, oc_string(dev_cxt->rsp.data.confirm_code));
++  es_rep_set_boolean(root, ccr, dev_cxt->rsp.data.confirm_code_required);
++  oc_rep_end_root_object();
++}
++
++static void
++rspconf_get_handler(oc_request_t *request, oc_interface_mask_t interface,
++            void *user_data)
++{
++  (void)user_data;
++  OC_DBG("GET request received");
++
++  if (interface != OC_IF_BASELINE) {
++    OC_ERR("Resource does not support this interface: %d", interface);
++    oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    return;
++  }
++
++  construct_response_of_rspconf(request);
++  oc_send_response(request, OC_STATUS_OK);
++}
++
++static void
++update_rspconf_resource(oc_request_t *request)
++{
++  char *str_val = NULL;
++  size_t str_len = 0;
++  bool ccr = false;
++  bool res_changed = false;
++  oc_ees_rsp_data_t rsp_cb_data;
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(request->origin->device);
++
++  if (oc_rep_get_string(request->request_payload, OC_RSRVD_EES_ACTIVATIONCODE, &str_val,
++                        &str_len)) {
++    es_new_string(&(dev_cxt->rsp.data.activation_code), str_val);
++    res_changed = true;
++  }
++  if (oc_rep_get_string(request->request_payload, OC_RSRVD_EES_PROFMETADATA, &str_val,
++                        &str_len)) {
++    es_new_string(&(dev_cxt->rsp.data.profile_metadata), str_val);
++    res_changed = true;
++  }
++  if (oc_rep_get_string(request->request_payload, OC_RSRVD_EES_CONFIRMATIONCODE, &str_val,
++                        &str_len)) {
++    es_new_string(&(dev_cxt->rsp.data.confirm_code), str_val);
++    res_changed = true;
++  }
++  if (oc_rep_get_bool(request->request_payload, OC_RSRVD_EES_CONFIRMATIONCODEREQUIRED, &ccr)) {
++    dev_cxt->rsp.data.confirm_code_required = ccr;
++    res_changed = true;
++  }
++
++  memcpy(&rsp_cb_data, &dev_cxt->rsp.data, sizeof(oc_ees_rsp_data_t));
++  rsp_cb_data.userdata = NULL;
++
++  if(res_changed && dev_cxt->rsp.prov_cb) {
++    // Trigger provisioning callback
++    dev_cxt->rsp.prov_cb(&rsp_cb_data);
++    //Notify observers about data change
++    oc_notify_observers(dev_cxt->rsp.handle);
++  }
++}
++
++static void
++rspconf_post_handler(oc_request_t *request, oc_interface_mask_t interface,
++             void *user_data)
++{
++  (void)user_data;
++  OC_DBG("POST request received");
++
++  if (interface != OC_IF_BASELINE) {
++    OC_ERR("Resource does not support this interface: %d", interface);
++    oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    return;
++  }
++
++  update_rspconf_resource(request);
++  construct_response_of_rspconf(request);
++  oc_send_response(request, OC_STATUS_CHANGED);
++}
++
++static void
++construct_response_of_rspcapconf(oc_request_t *request)
++{
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(request->origin->device);
++
++  oc_rep_start_root_object();
++  oc_process_baseline_interface(dev_cxt->rsp.handle);
++  es_rep_set_text_string(root, euiccinfo, oc_string(dev_cxt->rsp_cap.data.euicc_info));
++  es_rep_set_text_string(root, deviceinfo, oc_string(dev_cxt->rsp_cap.data.device_info));
++
++  oc_rep_end_root_object();
++}
++
++static void
++rspcapconf_get_handler(oc_request_t *request, oc_interface_mask_t interface,
++            void *user_data)
++{
++  (void)user_data;
++  OC_DBG("GET request received");
++
++  if (interface != OC_IF_BASELINE) {
++    OC_ERR("Resource does not support this interface: %d", interface);
++    oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    return;
++  }
++
++  construct_response_of_rspcapconf(request);
++  oc_send_response(request, OC_STATUS_OK);
++}
++
++static void
++update_rspcapconf_resource(oc_request_t *request)
++{
++  bool res_changed = false;
++  char *str_val = NULL;
++  size_t str_len = 0;
++  oc_ees_rspcap_data_t rspcap_cb_data;
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(request->origin->device);
++
++  if (oc_rep_get_string(request->request_payload, OC_RSRVD_EES_EUICCINFO, &str_val,
++                        &str_len)) {
++    es_new_string(&(dev_cxt->rsp_cap.data.euicc_info), str_val);
++    res_changed = true;
++  }
++  if (oc_rep_get_string(request->request_payload, OC_RSRVD_EES_DEVICEINFO, &str_val,
++                        &str_len)) {
++    es_new_string(&(dev_cxt->rsp_cap.data.device_info), str_val);
++    res_changed = true;
++  }
++
++  memcpy(&rspcap_cb_data, &dev_cxt->rsp_cap.data, sizeof(oc_ees_rspcap_data_t));
++  rspcap_cb_data.userdata = NULL;
++
++  if(res_changed && dev_cxt->rsp_cap.prov_cb) {
++    // Trigger provisioning callback
++    dev_cxt->rsp_cap.prov_cb(&rspcap_cb_data);
++    // Notify observers about data change
++    oc_notify_observers(dev_cxt->rsp_cap.handle);
++  }
++}
++
++static void
++rspcapconf_post_handler(oc_request_t *request, oc_interface_mask_t interface,
++	void *user_data)
++{
++  (void)user_data;
++  OC_DBG("POST request received");
++
++  if (interface != OC_IF_BASELINE) {
++    OC_ERR("Resource does not support this interface: %d", interface);
++    oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    return;
++  }
++
++  update_rspcapconf_resource(request);
++  construct_response_of_rspcapconf(request);
++  oc_send_response(request, OC_STATUS_CHANGED);
++}
++
++void
++get_ees_properties(oc_resource_t *resource, oc_interface_mask_t iface_mask,
++                        void *data)
++{
++  (void)data;
++  oc_collection_t *ees = (oc_collection_t *)resource;
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(ees->device);
++
++  oc_rep_start_root_object();
++
++  switch (iface_mask) {
++  case OC_IF_BASELINE:
++    es_rep_set_text_string(root, ps, oc_string(dev_cxt->ees.data.rsp_status));
++    es_rep_set_text_string(root, ler, oc_string(dev_cxt->ees.data.last_err_reason));
++    es_rep_set_text_string(root, lec, oc_string(dev_cxt->ees.data.last_err_code));
++    es_rep_set_text_string(root, led, oc_string(dev_cxt->ees.data.last_err_desc));
++    es_rep_set_text_string(root, euc, oc_string(dev_cxt->ees.data.end_user_conf));
++    break;
++  default:
++    break;
++  }
++  oc_rep_end_root_object();
++}
++
++bool
++set_ees_properties(oc_resource_t *resource, oc_rep_t *rep, void *data)
++{
++  (void)data;
++  char *str_val = NULL;
++  size_t str_len = 0;
++  oc_ees_data_t cb_data;
++  oc_collection_t *ees = (oc_collection_t *)resource;
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(ees->device);
++
++  while (rep != NULL) {
++    switch (rep->type) {
++      case OC_REP_STRING:
++        if (oc_rep_get_string(rep, OC_RSRVD_EES_PROVSTATUS,
++  	  	&str_val, &str_len)) {
++          es_new_string(&(dev_cxt->ees.data.rsp_status), str_val);
++        }
++        if (oc_rep_get_string(rep, OC_RSRVD_EES_LASTERRORREASON,
++  	  	&str_val, &str_len)) {
++          es_new_string(&(dev_cxt->ees.data.last_err_reason), str_val);
++        }
++        if (oc_rep_get_string(rep, OC_RSRVD_EES_LASTERRORCODE,
++  	  	&str_val, &str_len)) {
++          es_new_string(&(dev_cxt->ees.data.last_err_code), str_val);
++        }
++        if (oc_rep_get_string(rep, OC_RSRVD_EES_LASTERRORRDESCRIPTION,
++  	  	&str_val, &str_len)) {
++          es_new_string(&(dev_cxt->ees.data.last_err_desc), str_val);
++        }
++        if (oc_rep_get_string(rep, OC_RSRVD_EES_ENDUSERCONFIRMATION,
++  	  	&str_val, &str_len)) {
++          es_new_string(&(dev_cxt->ees.data.end_user_conf), str_val);
++        }
++        break;
++      default:
++        break;
++    }
++    rep = rep->next;
++  }
++
++  if (dev_cxt->ees.prov_cb) {
++    memcpy(&cb_data, &dev_cxt->ees.data, sizeof(oc_ees_data_t));
++    cb_data.userdata = NULL;
++    dev_cxt->ees.prov_cb(&cb_data);
++  }
++  oc_notify_observers((oc_resource_t *)dev_cxt->ees.handle);
++  return true;
++}
++
++void
++oc_create_esim_easysetup_resource(size_t device)
++{
++  OC_DBG("oc_create_esim_easysetup_resource : %d", device);
++
++#ifdef OC_DYNAMIC_ALLOCATION
++  assert(device <  OC_MAX_NUM_DEVICES);
++#endif
++
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(device);
++  es_new_string(&(dev_cxt->ees.data.rsp_status), EES_PS_NONE);
++
++  // Esim Easy Setup Resource
++  oc_core_populate_collection(
++    OCF_EES,
++    device,
++    OC_RSRVD_EES_URI_ESIMEASYSETUP,
++    OC_DISCOVERABLE | OC_SECURE,
++    2,
++    OC_RSRVD_EES_RES_TYPE_ESIMEASYSETUP,
++    "oic.wk.col");
++
++  dev_cxt->ees.handle =
++  	 (oc_collection_t *)oc_core_get_resource_by_index(OCF_EES, device);
++
++  oc_resource_set_properties_cbs((oc_resource_t *)dev_cxt->ees.handle, get_ees_properties, NULL,
++                                 set_ees_properties, NULL);
++
++  //RSP Conf Recource
++  oc_core_populate_resource(
++    OCF_EES_RSP,
++    device,
++    OC_RSRVD_EES_URI_RSPCONF,
++    OC_IF_RW | OC_IF_BASELINE,
++    OC_IF_RW,
++    OC_SECURE | OC_DISCOVERABLE | OC_OBSERVABLE,
++    rspconf_get_handler,
++    0,
++    rspconf_post_handler,
++    0,
++    1,
++    OC_RSRVD_EES_RES_TYPE_RSPCONF);
++
++  dev_cxt->rsp.handle = oc_core_get_resource_by_index(OCF_EES_RSP, device);
++  oc_link_t *l1 = oc_new_link(dev_cxt->rsp.handle);
++  oc_collection_add_link((oc_resource_t *)dev_cxt->ees.handle, l1);
++
++  // RSP Capability Conf Resource
++  oc_core_populate_resource(
++    OCF_EES_RSPCAP,
++    device,
++    OC_RSRVD_EES_URI_RSPCAPCONF,
++    OC_IF_RW | OC_IF_BASELINE,
++    OC_IF_RW,
++    OC_SECURE | OC_DISCOVERABLE | OC_OBSERVABLE,
++    rspcapconf_get_handler,
++    0,
++    rspcapconf_post_handler,
++    0,
++    1,
++    OC_RSRVD_EES_RES_TYPE_RSPCAPCONF);
++
++  dev_cxt->rsp_cap.handle = oc_core_get_resource_by_index(OCF_EES_RSPCAP, device);
++  oc_link_t *l2 = oc_new_link(dev_cxt->rsp_cap.handle);
++  oc_collection_add_link((oc_resource_t *)dev_cxt->ees.handle, l2);
++}
++
++void
++oc_delete_esim_easysetup_resource(size_t device)
++{
++  OC_DBG("oc_delete_esim_easysetup_resource : %d", device);
++  oc_esim_enrollee_t *dev_cxt = get_esim_device_context(device);
++
++  // dev_cxt->rsp.handle is freed during core shwtdown
++  es_free_string(dev_cxt->rsp.data.activation_code);
++  es_free_string(dev_cxt->rsp.data.profile_metadata);
++  es_free_string(dev_cxt->rsp.data.confirm_code);
++  dev_cxt->rsp.prov_cb = NULL;
++
++  // dev_cxt->rsp_cap.handle is freed during core shwtdown
++  es_free_string(dev_cxt->rsp_cap.data.euicc_info);
++  es_free_string(dev_cxt->rsp_cap.data.device_info);
++  dev_cxt->rsp_cap.prov_cb = NULL;
++
++  // Collection is not freed by default. Free collection here.
++  if (dev_cxt->ees.handle) {
++    oc_delete_collection((oc_resource_t *)dev_cxt->ees.handle);
++    dev_cxt->ees.handle = NULL;
++  }
++  es_free_string(dev_cxt->ees.data.rsp_status);
++  es_free_string(dev_cxt->ees.data.last_err_reason);
++  es_free_string(dev_cxt->ees.data.last_err_code);
++  es_free_string(dev_cxt->ees.data.last_err_desc);
++  es_free_string(dev_cxt->ees.data.end_user_conf);
++  dev_cxt->ees.prov_cb = NULL;
++}
++
++#endif // OC_ESIM_EASYSETUP
+diff --git a/api/oc_core_res.c b/api/oc_core_res.c
+index 000e3b31..c2c00bad 100644
+--- a/api/oc_core_res.c
++++ b/api/oc_core_res.c
+@@ -25,6 +25,7 @@
+ #include "oc_introspection_internal.h"
+ #include "oc_rep.h"
+ #include "oc_collection.h"
++#include "oc_easysetup_enrollee.h"
+ 
+ #ifdef OC_SECURITY
+ #include "security/oc_doxm.h"
+@@ -115,7 +116,7 @@ oc_core_shutdown(void)
+     for (i = 0; i < 1 + (OCF_D * device_count); ++i) {
+ #if defined(OC_COLLECTIONS) && defined(OC_SERVER)
+ #if defined(OC_WIFI_EASYSETUP)
+-      if (j == OCF_ES) {
++      if (j == OCF_WES) {
+         // Skip
+       } else
+ #endif /* OC_WIFI_EASYSETUP */
+@@ -321,7 +322,7 @@ oc_core_add_new_device(const char *uri, const char *rt, const char *name,
+   size_t i, base = new_num - OCF_D;
+   for (i = base; i < new_num; i++) {
+ #if defined(OC_WIFI_EASYSETUP) && defined(OC_COLLECTIONS) && defined(OC_SERVER)
+-    if (i == (base + OCF_ES - 1)) {
++    if (i == (base + OCF_WES - 1)) {
+       // Skip.
+     } else
+ #endif /* OC_WIFI_EASYSETUP && OC_COLLECTIONS && OC_SERVER */
+@@ -387,26 +388,11 @@ oc_core_add_new_device(const char *uri, const char *rt, const char *name,
+ #if defined(OC_CLIENT) && defined(OC_SERVER) && defined(OC_CLOUD)
+   oc_create_cloudconf_resource(device_count);
+ #endif /* OC_CLIENT && OC_SERVER && OC_CLOUD */
+-
+-  /* TODO: Change code below with calls into WES/EES modules to create
+-   * the Collection and conf/devconf resources and add them as links.
+-   * The code below is for illustrative purposes only
+-   */
+ #if defined(OC_WIFI_EASYSETUP) && defined(OC_COLLECTIONS) && defined(OC_SERVER)
+-  oc_core_populate_collection(OCF_ES, device_count, "/EasySetupResURI",
+-                              OC_DISCOVERABLE | OC_SECURE, 2, "oic.r.easysetup",
+-                              "oic.wk.col");
+-  /* You can obtain a handle to the Collection as below. Use it to
+-     add links.
+-  */
+-  oc_collection_t *es_coll =
+-    (oc_collection_t *)oc_core_get_resource_by_index(OCF_ES, device_count);
+-  (void)es_coll;
++  oc_create_wifi_easysetup_resource(device_count);
+ #endif /* OC_WIFI_EASYSETUP && OC_COLLECTIONS && OC_SERVER */
+ #if defined(OC_ESIM_EASYSETUP) && defined(OC_COLLECTIONS) && defined(OC_SERVER)
+-  oc_core_populate_collection(OCF_EES, device_count, "/EsimEasySetupResURI",
+-                              OC_DISCOVERABLE | OC_SECURE, 2,
+-                              "oic.r.esimeasysetup", "oic.wk.col");
++  oc_create_esim_easysetup_resource(device_count);
+ #endif /* OC_ESIM_EASYSETUP && OC_COLLECTIONS && OC_SERVER */
+ 
+   oc_device_info[device_count].data = data;
+@@ -632,7 +618,6 @@ oc_core_is_DCR(oc_resource_t *resource, size_t device)
+   return false;
+ }
+ 
+-// TODO: Need to add WES/EES resources here.
+ oc_resource_t *
+ oc_core_get_resource_by_uri(const char *uri, size_t device)
+ {
+@@ -670,6 +655,18 @@ oc_core_get_resource_by_uri(const char *uri, size_t device)
+     type = OCF_COAPCLOUDCONF;
+   }
+ #endif /* OC_CLOUD */
++#ifdef OC_WIFI_EASYSETUP
++  else if ((strlen(uri) - skip) == 15 &&
++           memcmp(uri + skip, "EasySetupResURI", 15) == 0) {
++    type = OCF_WES;
++  }
++#endif /* OC_WIFI_EASYSETUP */
++#ifdef OC_ESIM_EASYSETUP
++  else if ((strlen(uri) - skip) == 19 &&
++           memcmp(uri + skip, "EsimEasySetupResURI", 19) == 0) {
++    type = OCF_EES;
++  }
++#endif /* OC_ESIM_EASYSETUP */
+ #ifdef OC_SECURITY
+   else if ((strlen(uri) - skip) == 12) {
+     if (memcmp(uri + skip, "oic/sec/doxm", 12) == 0) {
+diff --git a/apps/euicc_easysetup_enrollee.c b/apps/euicc_easysetup_enrollee.c
+new file mode 100755
+index 00000000..c2a19ff7
+--- /dev/null
++++ b/apps/euicc_easysetup_enrollee.c
+@@ -0,0 +1,394 @@
++/****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++#include <pthread.h>
++#include <signal.h>
++#include <stdio.h>
++#include "oc_api.h"
++#include "oc_core_res.h"
++#include "oc_config.h"
++#include "port/oc_clock.h"
++#include "oc_easysetup_enrollee.h"
++#include "wifi.h"
++//#include "lpa.h"
++
++#define SOFT_AP_PWD "1111122222"
++#define SOFT_AP_CHANNEL (6)
++
++// There are indicative values and might vary with application requirement
++#define MAX_APP_DATA_SIZE 8192
++#define MAX_MTU_SIZE 2048
++
++static int g_device_count = 0;
++static pthread_mutex_t mutex;
++static pthread_cond_t cond;
++static struct timespec ts;
++static bool g_exit = 0;
++
++// Information read from eUICC
++oc_ees_device_info_t info;
++
++// Device 1 Callbaks
++static void
++ees_prov_cb1(oc_ees_data_t *ees_prov_data)
++{
++  PRINT("ees_prov_cb1\n");
++  if (ees_prov_data == NULL) {
++      PRINT("ees_prov_data is NULL\n");
++      return;
++  }
++  PRINT("RSP Status : %s\n", oc_string(ees_prov_data->rsp_status));
++  PRINT("Last Error Rason : %s\n", oc_string(ees_prov_data->last_err_reason));
++  PRINT("Last Error Code : %s\n", oc_string(ees_prov_data->last_err_code));
++  PRINT("Last Error Description : %s\n", oc_string(ees_prov_data->last_err_desc));
++  PRINT("End User Conformation\n : %s\n", oc_string(ees_prov_data->end_user_conf));
++}
++
++static void
++rsp_prov_cb1(oc_ees_rsp_data_t *rsp_prov_data)
++{
++  PRINT("rsp_prov_cb1\n");
++  if (rsp_prov_data == NULL) {
++      PRINT("rsp_prov_data is NULL\n");
++      return;
++  }
++  PRINT("Activation Code : %s\n", oc_string(rsp_prov_data->activation_code));
++  //1 Wite Access code to LPA here
++  PRINT("Profile Meta Data : %s\n", oc_string(rsp_prov_data->profile_metadata));
++  PRINT("Confirmation Code : %s\n", oc_string(rsp_prov_data->confirm_code));
++  PRINT("Confirmation Code Required : %d\n", rsp_prov_data->confirm_code_required);
++}
++
++static void
++rspcap_prov_cb1(oc_ees_rspcap_data_t *rspcap_prov_data)
++{
++  PRINT("rspcap_prov_cb1\n");
++  if (rspcap_prov_data == NULL) {
++      PRINT("rspcap_prov_data is NULL\n");
++      return;
++  }
++  //1 Check the Integrity of data set by application
++  PRINT("Euicc Info : %s\n", oc_string(rspcap_prov_data->euicc_info));
++  PRINT("Device Info : %s\n", oc_string(rspcap_prov_data->device_info));
++}
++
++static void
++ees_wifi_prov_cb1(oc_wes_wifi_data_t *wifi_prov_data)
++{
++  PRINT("ees_wifi_prov_cb1 triggered\n");
++  if (wifi_prov_data == NULL) {
++      PRINT("wes_prov_data is NULL\n");
++      return;
++  }
++  PRINT("SSID : %s\n", oc_string(wifi_prov_data->ssid));
++  PRINT("Password : %s\n", oc_string(wifi_prov_data->pwd));
++  PRINT("AuthType : %d\n", wifi_prov_data->authtype);
++  PRINT("EncType : %d\n", wifi_prov_data->enctype);
++
++  //1  Stop DHCP Server
++  wifi_stop_dhcp_server();
++  //1 Start WiFi Station
++  wifi_start_station();
++  //1 Join WiFi AP with ssid, authtype and pwd
++  wifi_join(NULL, NULL, NULL);
++  //1 Start DHCP client
++  wifi_start_dhcp_client();
++}
++
++static void
++free_userdata_cb1(void* userdata, char* resource_type)
++{
++    (void)resource_type;
++    (void)userdata;
++    PRINT("free_userdata_cb1");
++}
++
++static void
++read_userdata_cb1(oc_rep_t* payload, char* resource_type,
++	void** userdata)
++{
++    (void)resource_type;
++    (void)payload;
++    (void)userdata;
++    PRINT("read_userdata_cb1");
++}
++
++static void
++write_userdata_cb1(oc_rep_t* payload, char* resource_type)
++{
++    (void)resource_type;
++    (void)payload;
++    PRINT("write_userdata_cb1");
++}
++
++// Device 2 Callbacks
++static void
++ees_prov_cb2(oc_ees_data_t *ees_prov_data)
++{
++  PRINT("ees_prov_cb2 triggered\n");
++  if (ees_prov_data == NULL) {
++      PRINT("ees_prov_data is NULL\n");
++      return;
++  }
++  PRINT("RSP Status : %s\n", oc_string(ees_prov_data->rsp_status));
++  PRINT("Last Error Rason : %s\n", oc_string(ees_prov_data->last_err_reason));
++  PRINT("Last Error Code : %s\n", oc_string(ees_prov_data->last_err_code));
++  PRINT("Last Error Description : %s\n", oc_string(ees_prov_data->last_err_desc));
++  PRINT("End User Conformation\n : %s\n", oc_string(ees_prov_data->end_user_conf));
++}
++
++static void
++rsp_prov_cb2(oc_ees_rsp_data_t *rsp_prov_data)
++{
++  PRINT("rsp_prov_cb2 triggered\n");
++  if (rsp_prov_data == NULL) {
++      PRINT("rsp_prov_data is NULL\n");
++      return;
++  }
++  PRINT("Activation Code : %s\n", oc_string(rsp_prov_data->activation_code));
++  //1 Wite Access code to LPA here
++  PRINT("Profile Meta Data : %s\n", oc_string(rsp_prov_data->profile_metadata));
++  PRINT("Confirmation Code : %s\n", oc_string(rsp_prov_data->confirm_code));
++  PRINT("Confirmation Code Required : %d\n", rsp_prov_data->confirm_code_required);
++}
++
++static void
++rspcap_prov_cb2(oc_ees_rspcap_data_t *rspcap_prov_data)
++{
++  PRINT("rspcap_prov_cb2 triggered\n");
++  if (rspcap_prov_data == NULL) {
++      PRINT("rspcap_prov_data is NULL\n");
++      return;
++  }
++  //1 Check the Integrity of data set by application
++  PRINT("Euicc Info : %s\n", oc_string(rspcap_prov_data->euicc_info));
++  PRINT("Device Info : %s\n", oc_string(rspcap_prov_data->device_info));
++}
++
++static void
++ees_wifi_prov_cb2(oc_wes_wifi_data_t *wifi_prov_data)
++{
++  PRINT("wifi_prov_cb1 triggered\n");
++  if (wifi_prov_data == NULL) {
++      PRINT("wes_prov_data is NULL\n");
++      return;
++  }
++  PRINT("SSID : %s\n", oc_string(wifi_prov_data->ssid));
++  PRINT("Password : %s\n", oc_string(wifi_prov_data->pwd));
++  PRINT("AuthType : %d\n", wifi_prov_data->authtype);
++  PRINT("EncType : %d\n", wifi_prov_data->enctype);
++
++  //1  Stop DHCP Server
++  wifi_stop_dhcp_server();
++  //1 Start WiFi Station
++  wifi_start_station();
++  //1 Join WiFi AP with ssid, authtype and pwd
++  wifi_join(NULL, NULL, NULL);
++  //1 Start DHCP client
++  wifi_start_dhcp_client();
++}
++
++static void
++free_userdata_cb2(void* userdata, char* resource_type)
++{
++    (void)resource_type;
++    (void)userdata;
++    PRINT("free_userdata_cb2");
++}
++
++static void
++read_userdata_cb2(oc_rep_t* payload, char* resource_type,
++	void** userdata)
++{
++    (void)resource_type;
++    (void)payload;
++    (void)userdata;
++    PRINT("read_userdata_cb2");
++}
++
++static void
++write_userdata_cb2(oc_rep_t* payload, char* resource_type)
++{
++    (void)resource_type;
++    (void)payload;
++    PRINT("write_userdata_cb2");
++}
++
++// resource provisioning callbacks for 2 devices
++ees_device_callbacks_s g_rsc_cbks[] = {
++  {
++    .oc_ees_prov_cb_t = &ees_prov_cb1,
++    .oc_ees_rsp_prov_cb_t = &rsp_prov_cb1,
++    .oc_ees_rspcap_prov_cb_t = &rspcap_prov_cb1,
++    .oc_wes_wifi_prov_cb_t = &ees_wifi_prov_cb1,
++  },
++  {
++    .oc_ees_prov_cb_t = &ees_prov_cb2,
++    .oc_ees_rsp_prov_cb_t = &rsp_prov_cb2,
++    .oc_ees_rspcap_prov_cb_t = &rspcap_prov_cb2,
++    .oc_wes_wifi_prov_cb_t = &ees_wifi_prov_cb2,
++  }
++};
++
++// vendor specific callbacks for 2 devices
++es_userdata_callbacks_s g_ud_cbks[] = {
++  {
++    .oc_es_write_userdata_cb_t = &write_userdata_cb1,
++    .oc_es_read_userdata_cb_t = &read_userdata_cb1,
++    .oc_es_free_userdata_cb_t = &free_userdata_cb1
++  },
++  {
++    .oc_es_write_userdata_cb_t = &write_userdata_cb2,
++    .oc_es_read_userdata_cb_t = &read_userdata_cb2,
++    .oc_es_free_userdata_cb_t = &free_userdata_cb2
++  }
++};
++
++static int
++app_init(void)
++{
++  int err = oc_init_platform("Samsung", NULL, NULL);
++  if(err) {
++    PRINT("oc_init_platform error %d\n", err);
++    return err;
++  }
++
++  err = oc_add_device("/oic/d", "oic.d.test1", "eSIM Easysetup Test", "ocf.2.0",
++                       "ocf.res.2.0", NULL, NULL);
++  if(err) {
++    PRINT("Add oic.d.test1 device error %d\n", err);
++    return err;
++  }
++
++  err = oc_add_device("/oic/d", "oic.d.test2", "eSIM Easysetup Test", "ocf.2.0",
++                       "ocf.res.2.0", NULL, NULL);
++  if(err) {
++    PRINT("Add oic.d.test2 device error %d\n", err);
++    return err;
++  }
++
++  g_device_count = oc_core_get_num_devices();
++  PRINT("Numer of registered  Devices %d\n", g_device_count);
++
++  return err;
++}
++
++static void
++signal_event_loop(void)
++{
++  pthread_mutex_lock(&mutex);
++  pthread_cond_signal(&cond);
++  pthread_mutex_unlock(&mutex);
++}
++
++static void
++register_resources(void)
++{
++  char euicc_info[128] = "TestESIMInfo";
++  char device_info[128] =  "TestDevicInfo";
++  oc_ees_device_info_t ees_device_info;
++
++  for(int dev_index = 0; dev_index < g_device_count; ++dev_index) {
++    // Set callbacks for Resource operations
++    oc_ees_set_resource_callbacks(dev_index, g_rsc_cbks[dev_index].oc_ees_prov_cb_t,
++    		g_rsc_cbks[dev_index].oc_ees_rsp_prov_cb_t, g_rsc_cbks[dev_index].oc_ees_rspcap_prov_cb_t);
++
++    // Set callbacks for Vendor Specific Properties
++    oc_ees_set_userdata_callbacks(dev_index, g_ud_cbks[dev_index].oc_es_read_userdata_cb_t,
++    		g_ud_cbks[dev_index].oc_es_write_userdata_cb_t, g_ud_cbks[dev_index].oc_es_free_userdata_cb_t);
++
++    //1 Read euicc_info, device_info from LPA module here for each device
++    //lpa_get_euicc_info(euicc_info);
++    //lpa_get_device_info
++
++    //1 Set euicc info , device Info to OCF resources for each device
++    oc_new_string(&ees_device_info.LPA.euicc_info, euicc_info, strlen(euicc_info));
++    oc_new_string(&ees_device_info.LPA.device_info, device_info, strlen(device_info));
++
++     if (oc_ees_set_device_info(dev_index, &ees_device_info) == OC_ES_ERROR)
++         PRINT("oc_es_set_device_info error!\n");
++  }
++}
++
++static void
++handle_signal(int signal)
++{
++  (void)signal;
++  signal_event_loop();
++  g_exit = true;
++}
++
++void
++main(void)
++{
++  struct sigaction sa;
++  sigfillset(&sa.sa_mask);
++  sa.sa_flags = 0;
++  sa.sa_handler = handle_signal;
++  sigaction(SIGINT, &sa, NULL);
++
++  // Init LPA Here
++  PRINT("euicc_easysetup_enrollee : Start\n");
++
++  //1 TODO : Platform Interface
++  wifi_start_softap(NULL, NULL, NULL, 1);
++  wifi_start_dhcp_server();
++
++  pthread_mutex_init(&mutex, NULL);
++  pthread_cond_init(&cond, NULL);
++  //Create OCF handler
++  static const oc_handler_t handler = {.init = app_init,
++                                       .signal_event_loop = signal_event_loop,
++                                       .register_resources =  register_resources };
++
++
++  oc_set_mtu_size(MAX_MTU_SIZE);
++  oc_set_max_app_data_size(MAX_APP_DATA_SIZE);
++
++#ifdef OC_SECURITY
++  oc_storage_config("/mnt/smart_meter_creds");
++#endif
++
++  if (oc_main_init(&handler) < 0) {
++    PRINT("oc_main_init failed");
++    return;
++  }
++
++  oc_clock_time_t next_event;
++
++  while (!g_exit) {
++    next_event = oc_main_poll();
++    pthread_mutex_lock(&mutex);
++    if (next_event == 0) {
++      pthread_cond_wait(&cond, &mutex);
++    } else {
++      ts.tv_sec = (next_event / OC_CLOCK_SECOND);
++      ts.tv_nsec = (next_event % OC_CLOCK_SECOND) * 1.e09 / OC_CLOCK_SECOND;
++      pthread_cond_timedwait(&cond, &mutex, &ts);
++    }
++    pthread_mutex_unlock(&mutex);
++  }
++
++  for(int dev_index = 0; dev_index < g_device_count; ++dev_index) {
++    oc_delete_esim_easysetup_resource(dev_index);
++  }
++  oc_main_shutdown();
++
++  PRINT("euicc_easysetup_enrollee : Exit\n");
++
++  return;
++}
+diff --git a/apps/wifi_easysetup_enrollee.c b/apps/wifi_easysetup_enrollee.c
+new file mode 100755
+index 00000000..38eacb7a
+--- /dev/null
++++ b/apps/wifi_easysetup_enrollee.c
+@@ -0,0 +1,333 @@
++/****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++#include <pthread.h>
++#include <signal.h>
++#include <stdio.h>
++#include "oc_api.h"
++#include "oc_core_res.h"
++#include "port/oc_clock.h"
++#include "oc_easysetup_enrollee.h"
++#include "wifi.h"
++
++#define SOFT_AP_PWD "1111122222"
++#define SOFT_AP_CHANNEL (6)
++
++// There are indicative values and might vary with application requirement
++#define MAX_APP_DATA_SIZE 8192
++#define MAX_MTU_SIZE 2048
++
++static int g_device_count = 0;
++static pthread_mutex_t mutex;
++static pthread_cond_t cond;
++static struct timespec ts;
++static bool g_exit = 0;
++
++// Device 1 Callbaks
++static void
++wes_prov_cb1(oc_wes_data_t *wes_prov_data)
++{
++  PRINT("wes_prov_cb1\n");
++  if (wes_prov_data == NULL) {
++      PRINT("wes_prov_data is NULL\n");
++      return;
++  }
++}
++
++static void
++device_prov_cb1(oc_wes_device_data_t *device_prov_data)
++{
++  PRINT("device_prov_cb1\n");
++  if (device_prov_data == NULL) {
++      PRINT("device_prov_data is NULL\n");
++      return;
++  }
++  PRINT("Device Name: %s\n", oc_string(device_prov_data->device_name));
++}
++
++static void
++wifi_prov_cb1(oc_wes_wifi_data_t *wifi_prov_data)
++{
++  PRINT("wifi_prov_cb1 triggered\n");
++  if (wifi_prov_data == NULL) {
++      PRINT("wes_prov_data is NULL\n");
++      return;
++  }
++  PRINT("SSID : %s\n", oc_string(wifi_prov_data->ssid));
++  PRINT("Password : %s\n", oc_string(wifi_prov_data->pwd));
++  PRINT("AuthType : %d\n", wifi_prov_data->authtype);
++  PRINT("EncType : %d\n", wifi_prov_data->enctype);
++
++  //1  Stop DHCP Server
++  wifi_stop_dhcp_server();
++  //1 Start WiFi Station
++  wifi_start_station();
++  //1 Join WiFi AP with ssid, authtype and pwd
++  wifi_join(NULL, NULL, NULL);
++  //1 Start DHCP client
++  wifi_start_dhcp_client();
++}
++
++static void
++free_userdata_cb1(void* userdata, char* resource_type)
++{
++    (void)resource_type;
++    (void)userdata;
++    PRINT("free_userdata_cb1");
++}
++
++static void
++read_userdata_cb1(oc_rep_t* payload, char* resource_type,
++	void** userdata)
++{
++    (void)resource_type;
++    (void)payload;
++    (void)userdata;
++    PRINT("read_userdata_cb1");
++}
++
++static void
++write_userdata_cb1(oc_rep_t* payload, char* resource_type)
++{
++    (void)resource_type;
++    (void)payload;
++    PRINT("write_userdata_cb1");
++}
++
++// Device 2 Callbaks
++static void
++wes_prov_cb2(oc_wes_data_t *wes_prov_data)
++{
++  PRINT("wes_prov_cb2\n");
++  if (wes_prov_data == NULL) {
++      PRINT("wes_prov_data is NULL\n");
++      return;
++  }
++}
++
++static void
++device_prov_cb2(oc_wes_device_data_t *device_prov_data)
++{
++  PRINT("device_prov_cb2\n");
++  if (device_prov_data == NULL) {
++      PRINT("device_prov_data is NULL\n");
++      return;
++  }
++  PRINT("Device Name: %s\n", oc_string(device_prov_data->device_name));
++}
++
++static void
++wifi_prov_cb2(oc_wes_wifi_data_t *wifi_prov_data)
++{
++  PRINT("wifi_prov_cb2\n");
++  if (wifi_prov_data == NULL) {
++      PRINT("wes_prov_data is NULL\n");
++      return;
++  }
++  PRINT("SSID : %s\n", oc_string(wifi_prov_data->ssid));
++  PRINT("Password : %s\n", oc_string(wifi_prov_data->pwd));
++  PRINT("AuthType : %d\n", wifi_prov_data->authtype);
++  PRINT("EncType : %d\n", wifi_prov_data->enctype);
++  //1  Stop DHCP Server
++  wifi_stop_dhcp_server();
++  //1 Start WiFi Station
++  wifi_start_station();
++  //1 Join WiFi AP with ssid, authtype and pwd
++  wifi_join(NULL, NULL, NULL);
++  //1 Start DHCP client
++  wifi_start_dhcp_client();
++}
++
++static void
++free_userdata_cb2(void* userdata, char* resource_type)
++{
++    (void)resource_type;
++    (void)userdata;
++    PRINT("free_userdata_cb2");
++}
++
++static void
++read_userdata_cb2(oc_rep_t* payload, char* resource_type,
++	void** userdata)
++{
++    (void)resource_type;
++    (void)payload;
++    (void)userdata;
++    PRINT("read_userdata_cb2");
++}
++
++static void
++write_userdata_cb2(oc_rep_t* payload, char* resource_type)
++{
++    (void)resource_type;
++    (void)payload;
++    PRINT("write_userdata_cb2");
++}
++
++// resource proisining callbacks for 2 devices
++wes_device_callbacks_s g_rsc_cbks[] = {
++  {
++    .oc_wes_prov_cb_t = &wes_prov_cb1,
++    .oc_wes_wifi_prov_cb_t = &wifi_prov_cb1,
++    .oc_wes_dev_prov_cb_t = &device_prov_cb1,
++  },
++  {
++    .oc_wes_prov_cb_t = &wes_prov_cb2,
++    .oc_wes_wifi_prov_cb_t = &wifi_prov_cb2,
++    .oc_wes_dev_prov_cb_t = &device_prov_cb2,
++  }
++};
++
++// vendor specific callbacks for 2 devices
++es_userdata_callbacks_s g_ud_cbks[] = {
++  {
++    .oc_es_write_userdata_cb_t = &write_userdata_cb1,
++    .oc_es_read_userdata_cb_t = &read_userdata_cb1,
++    .oc_es_free_userdata_cb_t = &free_userdata_cb1
++  },
++  {
++    .oc_es_write_userdata_cb_t = &write_userdata_cb2,
++    .oc_es_read_userdata_cb_t = &read_userdata_cb2,
++    .oc_es_free_userdata_cb_t = &free_userdata_cb2
++  }
++};
++static int
++app_init(void)
++{
++  int err = oc_init_platform("Samsung", NULL, NULL);
++  if(err) {
++    PRINT("oc_init_platform error %d\n", err);
++    return err;
++  }
++
++  // oc_create_wifi_easysetup_resource will be called by IoT Core
++  err = oc_add_device("/oic/d", "oic.d.test1", "WiFi Easysetup Test", "ocf.2.0",
++                       "ocf.res.2.0", NULL, NULL);
++  if(err) {
++    PRINT("Add oic.d.test1 device error %d\n", err);
++    return err;
++  }
++  err = oc_add_device("/oic/d", "oic.d.test2", "WiFi Easysetup Test", "ocf.2.0",
++                       "ocf.res.2.0", NULL, NULL);
++  if(err) {
++    PRINT("Add oic.d.test2 device error %d\n", err);
++    return err;
++  }
++
++  g_device_count = oc_core_get_num_devices();
++  PRINT("Numer of registered  Devices %d\n", g_device_count);
++  return err;
++}
++
++static void
++signal_event_loop(void)
++{
++  pthread_mutex_lock(&mutex);
++  pthread_cond_signal(&cond);
++  pthread_mutex_unlock(&mutex);
++}
++
++static void
++register_resources(void)
++{
++  char *device_name = "TestDevice";
++  oc_wes_device_info_t wes_device_info ={{{WIFI_11G, WIFI_11N, WIFI_11AC, WIFI_EOF },WIFI_5G},{{0}}};
++
++  for(int dev_index = 0; dev_index < g_device_count; ++dev_index) {
++
++    // Set callbacks for Resource operations
++    oc_wes_set_resource_callbacks(dev_index, g_rsc_cbks[dev_index].oc_wes_prov_cb_t,
++    		g_rsc_cbks[dev_index].oc_wes_wifi_prov_cb_t, g_rsc_cbks[dev_index].oc_wes_dev_prov_cb_t);
++
++    // Set callbacks for Vendor Specific Properties
++    oc_ees_set_userdata_callbacks(dev_index, g_ud_cbks[dev_index].oc_es_read_userdata_cb_t,
++    		g_ud_cbks[dev_index].oc_es_write_userdata_cb_t, g_ud_cbks[dev_index].oc_es_free_userdata_cb_t);
++
++    // Set Device Info
++    oc_new_string(&wes_device_info.Device.device_name, device_name, strlen(device_name));
++     if (oc_wes_set_device_info(dev_index, &wes_device_info) == OC_ES_ERROR)
++         PRINT("oc_wes_set_device_info error!\n");
++  }
++}
++
++static void
++handle_signal(int signal)
++{
++  (void)signal;
++  signal_event_loop();
++  g_exit = true;
++}
++
++void
++main(void)
++{
++  struct sigaction sa;
++  sigfillset(&sa.sa_mask);
++  sa.sa_flags = 0;
++  sa.sa_handler = handle_signal;
++  sigaction(SIGINT, &sa, NULL);
++
++  PRINT("wifi_easysetup_enrollee : Start\n");
++
++  //1 TODO : Platform Interface
++  wifi_start_softap(NULL, NULL, NULL, 1);
++  wifi_start_dhcp_server();
++
++  pthread_mutex_init(&mutex, NULL);
++  pthread_cond_init(&cond, NULL);
++  // Create OCF handler
++  static const oc_handler_t handler = {.init = app_init,
++                                       .signal_event_loop = signal_event_loop,
++                                       .register_resources =  register_resources };
++
++
++  oc_set_mtu_size(MAX_MTU_SIZE);
++  oc_set_max_app_data_size(MAX_APP_DATA_SIZE);
++
++#ifdef OC_SECURITY
++  oc_storage_config("/mnt/smart_meter_creds");
++#endif
++
++  if (oc_main_init(&handler) < 0) {
++    PRINT("oc_main_init failed");
++    return;
++  }
++
++  oc_clock_time_t next_event;
++
++  while (!g_exit) {
++    next_event = oc_main_poll();
++    pthread_mutex_lock(&mutex);
++    if (next_event == 0) {
++      pthread_cond_wait(&cond, &mutex);
++    } else {
++      ts.tv_sec = (next_event / OC_CLOCK_SECOND);
++      ts.tv_nsec = (next_event % OC_CLOCK_SECOND) * 1.e09 / OC_CLOCK_SECOND;
++      pthread_cond_timedwait(&cond, &mutex, &ts);
++    }
++    pthread_mutex_unlock(&mutex);
++  }
++
++  for(int dev_index = 0; dev_index < g_device_count; ++dev_index) {
++    oc_delete_wifi_easysetup_resource(dev_index);
++  }
++  oc_main_shutdown();
++
++  PRINT("wifi_easysetup_enrollee : Exit\n");
++
++  return;
++}
+diff --git a/deps/lpa/oc_lpa_api.c b/deps/lpa/oc_lpa_api.c
+new file mode 100755
+index 00000000..daed478c
+--- /dev/null
++++ b/deps/lpa/oc_lpa_api.c
+@@ -0,0 +1,73 @@
++/****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++#include "lpa.h"
++
++int lpa_init(int reset)
++{
++  //Open I/O interface with eUICC
++  //Reset eUICC memory is requested by application
++  return 0;
++}
++
++// euicc_challenge : Output
++int lpa_get_euicc_challenge(char *euicc_challenge)
++{
++  // Read eUICC chanllenge from eUICC
++  return 0;
++}
++
++// euicc_info : Output
++int lpa_get_euicc_info(char *euicc_info)
++{
++  char dummy[34] = "slo34jsk[alskdjfpasksassadjjaojsdo";
++  // Read EUICCInfo2 from eUICC and fill euicc_info
++  strncpy(euicc_info, dummy, sizeof(dummy));
++  return 0;
++}
++
++// device_info : Input
++// di_response : Output
++int  lpa_get_device_info(DeviceInfo device_info, void *di_response)
++{
++  // Use CtxParamsForCommonAuthentication Request to get signed by eUICC
++  return 0;
++}
++
++// activation_code : Input
++// ac_response : Output
++int lpa_authenticate_activation_code(char *activation_code, void *ac_response)
++{
++  // Use CtxParamsForCommonAuthentication Request to get signed by eUICC
++  return 0;
++}
++
++// Dwnload Bound Profile package from SD-DP+
++// Download the profile to eUICC
++// Enable the profile
++int  lpa_downalod_profile(void *di_response, char *euicc_challenge, 
++	void *euicc_info, void *ac_response)
++{
++  // Initiate authentication with SMDP+
++  // Authenitcate Client
++  // Get Bound Profile Package
++  // Update default SMDP+ address
++  // Load Bound Profile package (transfer to eUICC)
++  // Enable Profile on eUICC
++  // Set Nick name to the profile
++  return 0;
++}
+diff --git a/deps/lpa/oc_lpa_api.h b/deps/lpa/oc_lpa_api.h
+new file mode 100755
+index 00000000..6bf3164f
+--- /dev/null
++++ b/deps/lpa/oc_lpa_api.h
+@@ -0,0 +1,60 @@
++/****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++
++ #ifndef _LPA_H_
++#define _LPA_H_
++
++/*
++  Device Info defined by SGP.22 RSP Technical specification
++  DeviceInfo ::= SEQUENCE { tac Octet4, deviceCapabilities DeviceCapabilities, imei Octet8 OPTIONAL }
++  Should be coded using ASN.1 DER
++*/
++typedef struct DeviceInfoTag {
++	unsigned char tac[4]; // Indicative TAC of Samsung Fold 5G
++	unsigned char dev_cap[3]; // gsmSupportedRelease 13
++	unsigned char imei[8]; // Indicative IMEI of Vodafone UK
++} DeviceInfo;
++DeviceInfo device_info =  {{0x35, 0x68, 0x46, 0x10},{13,0,0},{0x23, 0x42, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00}};
++
++
++// Initialize local profie assistant
++int lpa_init(int reset);
++
++int lpa_get_euicc_challenge(char *euicc_challenge);
++
++// Use GetEUICCInfo of SGP.22 RSP Technical specification
++// euicc_info : Output
++int lpa_get_euicc_info(char *euicc_info);
++
++// Use CtxParamsForCommonAuthentication Request to get signed by eUICC
++// device_info : Input
++// di_response : Output
++int lpa_get_device_info(DeviceInfo device_info, void *di_response);
++
++// Use CtxParamsForCommonAuthentication Request to get signed by eUICC
++// activation_code : Input
++// ac_response : Output
++int lpa_authenticate_activation_code(char *activation_code, void *ac_response);
++
++// Dwnload Bound Profile package from SD-DP+
++// Download the profile to eUICC
++// Enable the profile
++int  lpa_downalod_profile(void *di_response, char *euicc_challenge,
++	void *euicc_info, void *ac_response);
++
++#endif //_LPA_H_
+diff --git a/include/oc_easysetup_enrollee.h b/include/oc_easysetup_enrollee.h
+new file mode 100755
+index 00000000..91554c23
+--- /dev/null
++++ b/include/oc_easysetup_enrollee.h
+@@ -0,0 +1,784 @@
++/****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++
++#ifndef _OC_EASYSETUP_ENROLLEE_H_
++#define _OC_EASYSETUP_ENROLLEE_H_
++
++/**
++ * @file
++ *
++ * This file contains Enrollee APIs.
++ */
++#ifdef __cplusplus
++extern "C" {
++#endif // __cplusplus
++
++#include "es_common.h"
++
++/**
++ * @brief Indicate the result of function call which is
++ * common for WiFi Easysetup and Esim Easysetup
++ */
++typedef enum {
++  /**
++   * Provisioning succeeds.
++   */
++  OC_ES_OK = 0,
++  /**
++   * Secure resource is discovered.
++   */
++  OC_ES_SECURE_RESOURCE_IS_DISCOVERED = 1,
++  /**
++   * Enrollee discovery fails in cloud provisioning.
++   */
++  OC_ES_ENROLLEE_DISCOVERY_FAILURE = 11,
++  /**
++   * Valid GET or POST request fails for some reason.
++   * This failure may happen when it failed to receive any response from
++   * Enrollee by a timeout
++   * threshold.
++   */
++  OC_ES_COMMUNICATION_ERROR,
++  /**
++   * Security opertion is not supported because Mediator is built as unsecured
++   * mode.
++   */
++  OC_ES_SEC_OPERATION_IS_NOT_SUPPORTED,
++  /**
++   * Security resource discovery fails due to loss of discovery packet or
++   * absence of the resource
++   * in a network.
++   */
++  OC_ES_SECURE_RESOURCE_DISCOVERY_FAILURE,
++  /**
++   * Ownership transfer fails due to one of unexpected reasons.
++   * E.g. A packet loss even with retransmission happens during ownership
++   * transfer.
++   * E.g. Mediator's owned status is 'unowned'
++   * E.g. A user confirmation for random pin-based or certificate-based OT fails
++   */
++  OC_ES_OWNERSHIP_TRANSFER_FAILURE = 20,
++  /**
++   * Ownership transfer which is cert-based method fails due to user
++   * confirmation is denied.
++   */
++  OC_ES_USER_DENIED_CONFIRMATION_REQ,
++  /**
++   * Ownership transfer which is cert-based method fails due to wrong
++   * certificate.
++   */
++  OC_ES_AUTHENTICATION_FAILURE_WITH_WRONG_CERT,
++  /**
++   * Ownership transfer which is random-pin method fails due to wrong pin.
++   */
++  OC_ES_AUTHENTICATION_FAILURE_WITH_WRONG_PIN,
++  /**
++   * Ownership information is not synchronized between Mediator and Enrollee.
++   * e.g. A mediator's PDM DB has an ownership information to the found enrollee
++   *      but it is actually owned by other mediator.
++   *      That can happen where the found enrollee is reset and performed in
++   * easy setup without
++   *      any inform to the first mediator.
++   * e.g. A list of owned devices managed in mediator's PMD db has no element
++   * for the found
++   *      enrollee.
++   *      That can happen where only mediator is reset without any inform to the
++   * enrollee.
++   * To proceed an ownership transfer to the enrollee, it needs to reset the
++   * enrollee's SVR DB for
++   * its owner, i.e. the mediator.
++   */
++  OC_ES_OWNERSHIP_IS_NOT_SYNCHRONIZED,
++  /**
++   * MOT is not supported at the target Enrollee device.
++   *
++   * @note This ESResult values will be returned ONLY IF a mediator is a first
++   * owner to an
++   * Enrollee.
++   * @note If the mediator gets this values, it means OT has been successfully
++   * done
++   * (or already took an ownership, before), but failed MOT configuration.
++   */
++  OC_ES_MOT_NOT_SUPPORTED = 30,
++  /**
++   * MOT enabling is failed.
++   *
++   * @note This ESResult values will be returned ONLY IF a mediator is a first
++   * owner to an
++   * Enrollee.
++   * @note If the mediator gets this values, it means OT has been successfully
++   * done
++   * (or already took an ownership, before), but failed MOT configuration.
++   */
++  OC_ES_MOT_ENABLING_FAILURE,
++  /**
++   * MOT method selection is failed.
++   *
++   * @note This ESResult values will be returned ONLY IF a mediator is a first
++   * owner to an
++   * Enrollee.
++   * @note If the mediator gets this values, it means OT has been successfully
++   * done
++   * (or already took an ownership, before), but failed MOT configuration.
++   */
++  OC_ES_MOT_METHOD_SELECTION_FAILURE,
++  /**
++   * A provisioning of Pre-configured pin number for MOT is failed.
++   *
++   * @note This ESResult values will be returned ONLY IF a mediator is a first
++   * owner to an
++   * Enrollee.
++   * @note If the mediator gets this values, it means OT has been successfully
++   * done
++   * (or already took an ownership, before), but failed MOT configuration.
++   */
++  OC_ES_PRE_CONFIG_PIN_PROVISIONING_FAILURE,
++  /**
++   * ACL provisioning fails in cloud provisioning.
++   * It could be that UUID format of cloud server is wrong.
++   * Or any response for the provisioning request is not arrived at Mediator
++   */
++  OC_ES_ACL_PROVISIONING_FAILURE = 40,
++  /**
++   * Cert. provisioning fails in cloud provisioning.
++   * It could be that you put a wrong cred ID of which the corresponding
++   * certificate does not
++   * exist in SVR DB.
++   * Or any response for the provisioning request is not arrived at Mediator
++   */
++  OC_ES_CERT_PROVISIONING_FAILURE,
++  /**
++   * Provisioning fails for some reason.
++   */
++  OC_ES_ERROR = 255
++} oc_es_result_t;
++
++/**
++ * @brief  A target configuration type to be connected (or executed).
++ */
++typedef enum {
++  OC_ES_CONNECT_NONE = 0,     // Init value
++  OC_ES_CONNECT_WIFI = 1,     // WiFi Conf resource
++  OC_ES_CONNECT_COAPCLOUD = 2 // Coap Cloud Conf resource
++} oc_es_connect_type_t;
++
++/**
++ * @brief Indicate enrollee and provisioning status. Provisioning status is
++ * shown in "provisioning status" property in easysetup resource.
++ * common for WiFi Easysetup and Esim Easysetup
++ */
++typedef enum {
++  /**
++   * Default state of the device.
++   */
++  OC_WES_INIT = 0,
++  /**
++   * Status indicating being connecting to target network.
++   */
++  OC_WES_CONNECTING_TO_ENROLLER,
++  /**
++   * Status indicating successful conection to target network.
++   */
++  OC_WES_CONNECTED_TO_ENROLLER,
++  /**
++   * Status indicating connection failure to target network.
++   */
++  OC_WES_FAILED_TO_CONNECT_TO_ENROLLER,
++  /**
++   * Status indicating being registering to cloud.
++   */
++  OC_WES_REGISTERING_TO_CLOUD,
++  /**
++   * Status indicating successful registration to cloud.
++   */
++  OC_WES_REGISTERED_TO_CLOUD,
++  /**
++   * Status indicating registeration failure to cloud.
++   */
++  OC_WES_FAILED_TO_REGISTER_TO_CLOUD,
++  /**
++   * Status indicating being publishing resources to cloud.
++   */
++  OC_WES_PUBLISHING_RESOURCES_TO_CLOUD,
++  /**
++   * Status indicating successful resource publish to cloud.
++   */
++  OC_WES_PUBLISHED_RESOURCES_TO_CLOUD,
++  /**
++   * Status indicating resource publish failure to cloud.
++   */
++  OC_WES_FAILED_TO_PUBLISH_RESOURCES_TO_CLOUD,
++  /**
++   * End of Easy setup status.
++   */
++  OC_WES_EOF = 255
++} oc_wes_enrollee_state_t;
++
++/**
++ * @brief Indicate last error code to describe a reason of error during WiFi easy
++ * setup.
++ */
++typedef enum {
++  /**
++   * Init Error Code.
++   */
++  OC_WES_NO_ERROR = 0,
++  /**
++   * WiFi's SSID is not found.
++   */
++  OC_WES_SSID_NOT_FOUND,
++  /**
++   * WiFi's Password is wrong.
++   */
++  OC_WES_PW_WRONG,
++  /**
++   * IP address is not allocated.
++   */
++  OC_WES_IP_NOT_ALLOCATED,
++  /**
++   * There is no Internet connection.
++   */
++  OC_WES_NO_INTERNETCONNECTION,
++  /**
++   * Timeout occured.
++   */
++  OC_WES_TIMEOUT,
++  /**
++   * Auth type is not supported by the Enrollee.
++   */
++  OC_WES_AUTH_TYPE_NOT_SUPPORTED,
++  /**
++   * Enc type is not supported by the Enrollee.
++   */
++  OC_WES_ENC_TYPE_NOT_SUPPORTED,
++  /**
++   * Auth type is not supported by the Enroller.
++   */
++  OC_WES_AUTH_TYPE_INVALID,
++  /**
++   * Enc type is not supported by the Enroller.
++   */
++  OC_WES_ENC_TYPE_INVALID,
++  /**
++   * Cloud server is not reachable due to wrong URL of cloud server, for
++   * example.
++   */
++  OC_WES_FAILED_TO_ACCESS_CLOUD_SERVER,
++  /**
++   * No response from cloud server.
++   */
++  OC_WES_NO_RESPONSE_FROM_CLOUD_SERVER,
++  /**
++   * Delivered authcode is not valid.
++   */
++  OC_WES_INVALID_AUTHCODE,
++  /**
++   * Access token is not valid due to its expiration, for example.
++   */
++  OC_WES_INVALID_ACCESSTOKEN,
++  /**
++   * Refresh of expired access token is failed due to some reasons.
++   */
++  OC_WES_FAILED_TO_REFRESH_ACCESSTOKEN,
++  /**
++   * Target device is not discovered in cloud server.
++   */
++  OC_WES_FAILED_TO_FIND_REGISTERED_DEVICE_IN_CLOUD,
++  /**
++   * Target user does not exist in cloud server.
++   */
++  OC_WES_FAILED_TO_FIND_REGISTERED_USER_IN_CLOUD,
++  /**
++   * Enrollee can not connect to a target WiFi AP because the AP resides in
++   * an unsupported WiFi frequency.
++   */
++  OC_WES_UNSUPPORTED_WIFI_FREQUENCY,
++  /**
++   * Unknown error occured.
++   */
++  OC_WES_UNKNOWN_ERROR = 255
++} oc_wes_error_code_t;
++
++/**
++ * @brief Data structure for connect request from Mediator.
++ */
++typedef struct
++{
++  oc_es_connect_type_t connect[NUM_CONNECT_TYPE]; /**< Connection type(s) sent by Mediator. */
++  int num_request;       /**< Size of connect array. */
++  oc_wes_enrollee_state_t state;
++  oc_wes_error_code_t last_err_code;
++  void *userdata;         /**< Vender Specific data. */
++} oc_wes_data_t;
++
++/**
++ * @brief Data structure delivered from Mediator, which provides Wi-Fi
++ * information.
++ */
++typedef struct
++{
++  oc_string_t ssid;       /**< SSID of the Enroller. */
++  oc_string_t pwd;        /**< Passphrase of the Enroller. */
++  wifi_authtype authtype; /**< Auth Type of the Enroller. */
++  wifi_enctype enctype;   /**< Encryption Type of the Enroller. */
++  void *userdata;         /**< Vender Specific data. */
++} oc_wes_wifi_data_t;
++
++/**
++ * @brief Data structure delivered from Mediator, which provides device
++ * configuration information.
++ */
++typedef struct
++{
++  oc_string_t device_name; /**< Device friendly name. */
++  void *userdata; /**< Vender Specific data. */
++} oc_wes_device_data_t;
++
++/**
++ * @brief Data structure stored for Device property which includes a WiFi and
++ * device configuration.
++ */
++typedef struct
++{
++  /**
++   * @brief Data structure indicating Wi-Fi configuration of Enrollee.
++   */
++  struct
++  {
++    wifi_mode supported_mode[NUM_WIFIMODE];  /**< Supported Wi-Fi modes e.g. 802.11 A / B / G / N etc. */
++    wifi_freq supported_freq;                /**< supported Wi-Fi frequency e.g. 2.4G, 5G etc. */
++  } WiFi;
++
++  /**
++   * @brief Data structure indicating device configuration of Enrollee.
++   */
++  struct
++  {
++    oc_string_t device_name;                 /**< Device friendly name. */
++  } Device;
++} oc_wes_device_info_t;
++
++/**
++ * @brief Indicate last error code to describe a reason of error during eSIM easy
++ * setup.
++ */
++typedef enum {
++  /**
++   * Init Error Code.
++   */
++  OC_EES_NO_ERROR = 0,
++  /**
++   * Fialed to read eUICC Info by LPA
++   */
++  OC_EES_EUICC_INFO_READ_FAILED,
++  /**
++   * Fialed to read Device Info by LPA
++   */
++  OC_EES_DEVICE_INFO_READ_FAILED,
++  /**
++   * Failed to install eUICC profile
++   */
++  OC_EES_INSTALL_PROFILE_FAILED,
++  /**
++   * Invalid Activation Code
++   */
++  OC_EES_ACTIVATION_CODE_INVALID,
++  /**
++   * Unknown error occured.
++   */
++  OC_EES_UNKNOWN_ERROR = 255
++} oc_ees_error_code_t;
++
++/**
++ * @brief Data structure for eSIM Easyset up collection.
++ */
++typedef struct
++{
++  oc_string_t rsp_status;
++  oc_string_t last_err_reason;
++  oc_string_t last_err_code;
++  oc_string_t last_err_desc;
++  oc_string_t end_user_conf;
++  void *userdata; /**< Vender Specific data. */
++} oc_ees_data_t;
++
++/**
++ * @brief Data structure for remote SIM provisioning
++ * request from Mediator.
++ */
++typedef struct
++{
++  oc_string_t activation_code;  /**< Activation code for eSIM profile. */
++  oc_string_t profile_metadata;
++  oc_string_t confirm_code;
++  bool confirm_code_required;
++  void *userdata; /**< Vender Specific data. */
++} oc_ees_rsp_data_t;
++
++/**
++ * @brief Data structure for device info
++ * read by Mediator.
++ */
++ typedef struct
++{
++  oc_string_t euicc_info;
++  oc_string_t device_info;
++  void *userdata; /**< Vender Specific data. */
++} oc_ees_rspcap_data_t;
++
++/**
++ * @brief Data structure stored for Device property which includes a WiFi and
++ * device configuration.
++ */
++typedef struct
++{
++  /**
++   * @brief Data structure indicating device configuration of Enrollee.
++   */
++  struct
++  {
++    oc_string_t euicc_info;
++    oc_string_t device_info;
++  } LPA;
++} oc_ees_device_info_t;
++
++/**
++ * A function pointer for registering a user-defined function to set
++ * user-specific properties to a
++ * response going back to a client.
++ * @param payload Represents a response. You can set a specific value with
++ * specific property key
++ * to the payload. If a client receives the response and know the property key,
++ * then it can
++ * extract the value.
++ * @param resource_type Used to distinguish which resource the received property
++ * belongs to.
++ */
++typedef void (*oc_es_write_userdata_cb_t)(oc_rep_t *payload, char *resource_type);
++
++/**
++ * A function pointer for registering a user-defined function to parse
++ * user-specific properties
++ * from received POST request.
++ * @param payload Represents a received POST request. If you know user-specific
++ * property key,
++ * then you can extract a corresponding value if it exists.
++ * @param resource_type Used to distinguish which resource the received property
++ * belongs to
++ * @param user_data User-specific data you want to deliver to desired users,
++ * i.e.
++ * application.
++ * The user should know a data structure of passed userdata.
++ */
++typedef void (*oc_es_read_userdata_cb_t)(oc_rep_t *payload, char *resource_type,
++                                    void **user_data);
++
++/**
++ * A callback function to clean up user data created in oc_wes_wifi_data_t,
++ * oc_wes_device_data_t and es_coap_cloud_conf_data.
++ *
++ * @param user_data User-specific data free up it's memory.
++ * @param resource_type Used to distinguish which resource user data
++ * beongs to.
++ */
++typedef void (*oc_es_free_userdata_cb_t)(void *user_data, char *resource_type);
++
++/**
++ * A function pointer for registering wifi easysetup callback
++ * @param payload Represents the data written to wes resource
++ */
++typedef void (*oc_wes_prov_cb_t)(oc_wes_data_t *);
++
++/**
++ * A function pointer for registering wifi callback
++ * @param payload Represents the data written to wifi conf resource
++ */
++typedef void (*oc_wes_wifi_prov_cb_t)(oc_wes_wifi_data_t *);
++
++/**
++ * A function pointer for registering device callback
++ * @param payload Represents the data written to device conf resource
++ */
++typedef void (*oc_wes_dev_prov_cb_t)(oc_wes_device_data_t *);
++
++/**
++ * This function populates WiFi EasySetup resources when application call
++ * oc_add_device
++ * This function will be invoked from IoT core when device configuration
++ * resources are populated.
++ *
++ * @param device	Index of the the device application created
++ *
++ * @return ::OC_WES_OK on success, some other value upon failure.
++ */
++void oc_create_wifi_easysetup_resource(size_t device);
++
++/**
++ * This function performs termination of all WiFi Easy Setup Resources
++ * populated for device
++ *
++ * @param device	Index of the the device application created
++ *
++ * @return ::void
++ */
++void oc_delete_wifi_easysetup_resource(size_t device);
++
++/**
++ * This function is to set two function pointer to handle user-specific
++ * properties in in-comming
++ * POST request and to out-going response for GET or POST request.
++ * If you register certain functions with this API, you have to handle oc_rep_t
++ * structure to
++ * set and get properties you want.
++ *
++ * @param readcb a callback for parsing properties from POST request
++ * @param writecb a callback for putting properties to a response to be sent
++ * @param free_cb callback to free allocated memory of user data in
++ * oc_wes_wifi_data_t, oc_wes_device_data_t.
++ *
++ * @return ::OC_WES_OK on success, some other value upon failure.
++ *
++ * @see oc_es_read_userdata_cb_t
++ * @see oc_es_write_userdata_cb_t
++ */
++oc_es_result_t oc_wes_set_resource_callbacks(size_t device, oc_wes_prov_cb_t wes_prov_cb,
++	oc_wes_wifi_prov_cb_t wifi_prov_cb, oc_wes_dev_prov_cb_t dev_prov_cb);
++
++/**
++ * This function is to set two function pointer to handle user-specific
++ * properties in in-comming
++ * POST request and to out-going response for GET or POST request.
++ * If you register certain functions with this API, you have to handle oc_rep_t
++ * structure to
++ * set and get properties you want.
++ *
++ * @param readcb a callback for parsing properties from POST request
++ * @param writecb a callback for putting properties to a response to be sent
++ * @param freecb callback to free allocated memory of user data in
++ * oc_wes_data_t, oc_wes_wifi_data_t, oc_wes_device_data_t.
++ *
++ * @return ::OC_WES_OK on success, some other value upon failure.
++ *
++ * @see oc_es_read_userdata_cb_t
++ * @see oc_es_write_userdata_cb_t
++ */
++oc_es_result_t oc_wes_set_userdata_callbacks(size_t device, oc_es_read_userdata_cb_t readcb,
++                                         oc_es_write_userdata_cb_t writecb,
++                                         oc_es_free_userdata_cb_t freecb);
++
++/**
++ * This function sets Device information.
++ *
++ * @param device_info Contains device information composed of WiFiConf
++ * Structure & Device Structure
++ *
++ * @return ::OC_WES_OK on success, some other value upon failure.
++ *
++ * @see oc_wes_device_info_t
++ */
++oc_es_result_t oc_wes_set_device_info(size_t device, oc_wes_device_info_t *device_info);
++
++/**
++ * This function Sets Enrollee's Error Code.
++ *
++ * @param wes_err_code Contains Enrollee's error code.
++ * @return ::OC_WES_OK on success, some other value upon failure.
++ *
++ * @see oc_wes_error_code_t
++ */
++oc_es_result_t oc_wes_set_error_code(size_t device, oc_wes_error_code_t err_code);
++
++/**
++ * This function sets WiFi Enrollee's State.
++ *
++ * @param es_state   Contains current enrollee's state.
++ * @return ::OC_WES_OK on success, some other value upon failure.
++ *
++ * @see oc_wes_enrollee_state_t
++ */
++oc_es_result_t oc_wes_set_state(size_t device, oc_wes_enrollee_state_t es_state);
++
++/**
++ * This function gets WiFi Enrollee's State.
++ *
++ * @return ::oc_wes_enrollee_state_t
++ *
++ * @see oc_wes_enrollee_state_t
++ */
++oc_wes_enrollee_state_t oc_wes_get_state(size_t device);
++
++/**
++ * A function pointer for registering esim easysetup callback
++ * @param payload Represents the data written to ees resource
++ */
++typedef void (*oc_ees_prov_cb_t)(oc_ees_data_t *);
++
++/**
++ * A function pointer for registering rsp callback
++ * @param payload Represents the data written to rsp conf resource
++ */
++typedef void (*oc_ees_rsp_prov_cb_t)(oc_ees_rsp_data_t *);
++
++/**
++ * A function pointer for registering rsp capability callback
++ * @param payload Represents the data written to rspcap conf resource
++ */
++typedef void (*oc_ees_rspcap_prov_cb_t)(oc_ees_rspcap_data_t *);
++
++/**
++ * This function populates ESIM EasySetup resources when application call
++ * oc_add_device
++ * This function will be invoked from IoT core when device configuration
++ * resources are populated.
++ *
++ * @param device	Index of the the device application created
++ *
++ * @return ::OC_EES_OK on success, some other value upon failure.
++ */
++void oc_create_esim_easysetup_resource(size_t device);
++
++/**
++ * This function performs termination of all ESIM Easy Setup Resources
++ * populated for device
++ *
++ * @param device	Index of the the device application created
++ *
++ * @return ::void
++ */
++void oc_delete_esim_easysetup_resource(size_t device);
++
++/**
++ * This function is to set two function pointer to handle user-specific
++ * properties in in-comming
++ * POST request and to out-going response for GET or POST request.
++ * If you register certain functions with this API, you have to handle oc_rep_t
++ * structure to
++ * set and get properties you want.
++ *
++ * @param readcb a callback for parsing properties from POST request
++ * @param writecb a callback for putting properties to a response to be sent
++ * @param free_userdata callback to free allocated memory of user data in
++ * oc_wes_data_t, oc_wes_wifi_data_t, oc_wes_device_data_t.
++ *
++ * @return ::OC_EES_OK on success, some other value upon failure.
++ *
++ * @see oc_es_read_userdata_cb_t
++ * @see oc_es_write_userdata_cb_t
++ */
++ oc_es_result_t oc_ees_set_resource_callbacks(size_t device, oc_ees_prov_cb_t ees_prov_cb,
++	oc_ees_rsp_prov_cb_t rsp_prov_cb, oc_ees_rspcap_prov_cb_t rspcap_prov_cb);
++
++/**
++ * This function is to set two function pointer to handle user-specific
++ * properties in in-comming
++ * POST request and to out-going response for GET or POST request.
++ * If you register certain functions with this API, you have to handle oc_rep_t
++ * structure to
++ * set and get properties you want.
++ *
++ * @param readcb a callback for parsing properties from POST request
++ * @param writecb a callback for putting properties to a response to be sent
++ * @param freecb callback to free allocated memory of user data in
++ * oc_ees_data_t, oc_ees_rsp_data_t and oc_ees_rspcap_data_t.
++ *
++ * @return ::OC_EES_OK on success, some other value upon failure.
++ *
++ * @see oc_es_read_userdata_cb_t
++ * @see oc_es_write_userdata_cb_t
++ */
++oc_es_result_t oc_ees_set_userdata_callbacks(size_t device, oc_es_read_userdata_cb_t readcb,
++                                         oc_es_write_userdata_cb_t writecb,
++                                         oc_es_free_userdata_cb_t freecb);
++
++/**
++ * This function sets Device information.
++ *
++ * @param device_info Contains device information composed of
++ * RspCapabilityConf Structure
++ *
++ * @return ::OC_EES_OK on success, some other value upon failure.
++ *
++ * @see oc_wes_device_info_t
++ */
++oc_es_result_t oc_ees_set_device_info(size_t device, oc_ees_device_info_t *device_info);
++
++/**
++ * This function Sets Enrollee's Error Code.
++ *
++ * @param ees_err_code Contains Enrollee's error code.
++ * @return ::OC_EES_OK on success, some other value upon failure.
++ *
++ * @see oc_ees_error_code_t
++ */
++oc_es_result_t oc_ees_set_error_code(size_t device, oc_string_t err_code);
++
++/**
++ * This function sets Esim Enrollee's State.
++ *
++ * @param es_state   Contains current enrollee's state.
++ * @return ::OC_EES_OK on success, some other value upon failure.
++ *
++ * @see oc_ees_enrollee_state
++ */
++oc_es_result_t oc_ees_set_state(size_t device, oc_string_t es_state);
++
++/**
++ * This function gets Esim Enrollee's State.
++ *
++ * @return ::oc_ees_enrollee_state
++ *
++ * @see oc_ees_enrollee_state
++ */
++oc_string_t oc_ees_get_state(size_t device);
++
++/**
++ * A set of functions pointers for callback functions which are called after
++ * Wi-Fi Easysetup provisioning data is received from Mediator.
++ */
++typedef struct
++{
++	void (*oc_wes_prov_cb_t)(oc_wes_data_t *);
++	void (*oc_wes_wifi_prov_cb_t)(oc_wes_wifi_data_t *);
++	void (*oc_wes_dev_prov_cb_t)(oc_wes_device_data_t *);
++} wes_device_callbacks_s;
++
++/**
++ * A set of functions pointers for callback functions which are called after
++ * ESIM Easysetup provisioning data is received from Mediator.
++ */
++typedef struct
++{
++	void (*oc_ees_prov_cb_t)(oc_ees_data_t *);
++	void (*oc_ees_rsp_prov_cb_t)(oc_ees_rsp_data_t *);
++	void (*oc_ees_rspcap_prov_cb_t)(oc_ees_rspcap_data_t *);
++	void (*oc_wes_wifi_prov_cb_t)(oc_wes_wifi_data_t *);
++} ees_device_callbacks_s;
++
++typedef struct
++{
++	void (*oc_es_write_userdata_cb_t)(oc_rep_t *, char *);
++	void (*oc_es_read_userdata_cb_t)(oc_rep_t *, char *, void **);
++	void (*oc_es_free_userdata_cb_t)(void *, char *);
++} es_userdata_callbacks_s;
++
++#ifdef __cplusplus
++}
++#endif // __cplusplus
++
++#endif /* _OC_EASYSETUP_ENROLLEE_H_ */
++
+diff --git a/include/oc_ri.h b/include/oc_ri.h
+index 1dd53b34..5cd111d3 100644
+--- a/include/oc_ri.h
++++ b/include/oc_ri.h
+@@ -105,14 +105,14 @@ typedef enum {
+ #endif /* OC_SOFTWARE_UPDATE */
+ #if defined(OC_COLLECTIONS) && defined(OC_SERVER)
+ #ifdef OC_WIFI_EASYSETUP
+-  OCF_ES,
+-  OCF_ES_WIFI,
+-  OCF_ES_DEVICE,
++  OCF_WES,
++  OCF_WES_WIFI,
++  OCF_WES_DEVICE,
+ #endif /* OC_WIFI_EASYSETUP */
+ #ifdef OC_ESIM_EASYSETUP
+   OCF_EES,
+   OCF_EES_RSP,
+-  OCF_EES_RSP_CAP,
++  OCF_EES_RSPCAP,
+ #endif /* OC_ESM_EASYSETUP */
+ #endif /* OC_COLLECTIONS && OC_SERVER */
+ #ifdef OC_SECURITY
+diff --git a/port/freertos/Makefile b/port/freertos/Makefile
+index bcecf318..e7cf05c7 100644
+--- a/port/freertos/Makefile
++++ b/port/freertos/Makefile
+@@ -93,7 +93,7 @@ endif
+ 	VPATH += ${topdir}/security/:${topdir}/deps/mbedtls/library:
+ endif
+ 
+-CFLAGS+=-I${topdir}/include/ -I${topdir}
++CFLAGS+=-I${topdir}/include/ -I${topdir} -I${topdir}/api/easysetup/
+ CFLAGS+=-I.
+ 
+ ifeq ($(IPV4),1)
+diff --git a/port/linux/Makefile b/port/linux/Makefile
+index 226cc40d..1bab4179 100644
+--- a/port/linux/Makefile
++++ b/port/linux/Makefile
+@@ -2,6 +2,7 @@ CC = gcc
+ SED = sed
+ INSTALL = install
+ OS = linux
++DEBUG = 1
+ ROOT_DIR = ../..
+ OUT_DIR = $(ROOT_DIR)/port/$(OS)
+ CHECK_SCRIPT = ../../tools/check.py
+@@ -111,7 +112,7 @@ VPATH=../../messaging/coap/:../../util/:../../api/:../../deps/tinycbor/src/:../.
+ LIBS?= -lm -pthread -lrt
+ 
+ SAMPLES = server client temp_sensor simpleserver simpleserver_pki simpleclient client_collections_linux \
+-	  server_collections_linux server_block_linux client_block_linux smart_home_server_linux multi_device_server multi_device_client smart_lock server_multithread_linux client_multithread_linux
++	  server_collections_linux server_block_linux client_block_linux smart_home_server_linux multi_device_server multi_device_client smart_lock server_multithread_linux client_multithread_linux euicc_easysetup_enrollee wifi_easysetup_enrollee
+ 
+ ifeq ($(CREATE),1)
+ 	EXTRA_CFLAGS += -DOC_COLLECTIONS_IF_CREATE
+@@ -137,6 +138,13 @@ endif
+ 
+ OBT = onboarding_tool
+ 
++# Easy Setup
++SRC_ES=$(wildcard ../../api/easysetup/*.c)
++CFLAGS += -I../../api/easysetup -I../../port -I../../include
++CFLAGS += -DOC_WIFI_EASYSETUP -DOC_ESIM_EASYSETUP -DOC_SERVER
++OBJ_ES=$(addprefix obj/easysetup/,$(notdir $(SRC_ES:.c=.o)))
++
++
+ ifeq ($(DEBUG),1)
+ 	EXTRA_CFLAGS += -DOC_DEBUG -g -O0
+ ifeq ($(DEBUG_TLS),1)
+@@ -182,8 +190,6 @@ ifeq ($(TCP),1)
+ 	EXTRA_CFLAGS += -DOC_TCP
+ endif
+ 
+-
+-
+ CFLAGS += $(EXTRA_CFLAGS)
+ CXXFLAGS += $(EXTRA_CFLAGS)
+ 
+@@ -195,10 +201,11 @@ SAMPLES_CREDS = $(addsuffix _creds, ${SAMPLES} ${OBT})
+ 
+ CONSTRAINED_LIBS = libiotivity-lite-server.a libiotivity-lite-client.a \
+ 		   libiotivity-lite-server.so libiotivity-lite-client.so \
+-		   libiotivity-lite-client-server.so libiotivity-lite-client-server.a
++		   libiotivity-lite-client-server.so libiotivity-lite-client-server.a \
++		   libiotivity-lite-easysetup.a libiotivity-lite-easysetup.so
+ 
+ PC = iotivity-lite-client.pc iotivity-lite-server.pc \
+-     iotivity-lite-client-server.pc
++     iotivity-lite-client-server.pc iotivity-lite-easysetup.pc
+ 
+ all: $(CONSTRAINED_LIBS) $(SAMPLES) $(PC)
+ 
+@@ -267,6 +274,11 @@ obj/client_server/%.o: %.c
+ 	@mkdir -p ${@D}
+ 	${CC} -c -o $@ $< ${CFLAGS} -DOC_CLIENT -DOC_SERVER
+ 
++obj/easysetup/%.o: %.c
++	@mkdir -p ${@D}
++	${CC} -c -o $@ $< ${CFLAGS} -DOC_WIFI_EASYSETUP -DOC_ESIM_EASYSETUP
++
++
+ obj/cloud/%.o: %.c
+ 	@mkdir -p ${@D}
+ 	${CC} -c -o $@ $< ${CFLAGS} ${CFLAGS_CLOUD}
+@@ -275,20 +287,26 @@ obj/server/oc_introspection.o: ../../include/server_introspection.dat.h
+ obj/client/oc_introspection.o: ../../include/server_introspection.dat.h
+ obj/client_server/oc_introspection.o: ../../include/server_introspection.dat.h
+ 
+-libiotivity-lite-server.a: $(OBJ_COMMON) $(OBJ_SERVER)
+-	$(AR) -rcs $@ $(OBJ_COMMON) $(OBJ_SERVER)
++libiotivity-lite-easysetup.a: $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_ES)
++	$(AR) -rcs $@ $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_ES)
++
++libiotivity-lite-easysetup.so: $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_ES)
++	$(CC) -shared -o $@ $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_ES) $(LIBS)
++
++libiotivity-lite-server.a: $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_ES)
++	$(AR) -rcs $@ $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_ES)
+ 
+-libiotivity-lite-server.so: $(OBJ_COMMON) $(OBJ_SERVER)
+-	$(CC) -shared -o $@ $(OBJ_COMMON) $(OBJ_SERVER) $(LIBS)
++libiotivity-lite-server.so: $(OBJ_COMMON) $(OBJ_SERVER) $(OBJ_ES)
++	$(CC) -shared -o $@ $(OBJ_COMMON) $(OBJ_SERVER) $(LIBS) $(OBJ_ES)
+ 
+-libiotivity-lite-client.a: $(OBJ_COMMON) $(OBJ_CLIENT)
+-	$(AR) -rcs $@ $(OBJ_COMMON) $(OBJ_CLIENT)
++libiotivity-lite-client.a: $(OBJ_COMMON) $(OBJ_CLIENT) $(OBJ_ES)
++	$(AR) -rcs $@ $(OBJ_COMMON) $(OBJ_CLIENT) $(OBJ_ES)
+ 
+-libiotivity-lite-client.so: $(OBJ_COMMON) $(OBJ_CLIENT)
+-	$(CC) -shared -o $@ $(OBJ_COMMON) $(OBJ_CLIENT) $(LIBS)
++libiotivity-lite-client.so: $(OBJ_COMMON) $(OBJ_CLIENT) $(OBJ_ES)
++	$(CC) -shared -o $@ $(OBJ_COMMON) $(OBJ_CLIENT) $(LIBS) $(OBJ_ES)
+ 
+-libiotivity-lite-client-server.a: $(OBJ_COMMON) $(OBJ_CLIENT_SERVER) $(OBJ_CLOUD)
+-	$(AR) -rcs $@ $(OBJ_COMMON) $(OBJ_CLIENT_SERVER) $(OBJ_CLOUD)
++libiotivity-lite-client-server.a: $(OBJ_COMMON) $(OBJ_CLIENT_SERVER) $(OBJ_CLOUD) $(OBJ_ES)
++	$(AR) -rcs $@ $(OBJ_COMMON) $(OBJ_CLIENT_SERVER) $(OBJ_CLOUD) $(OBJ_ES)
+ 
+ libiotivity-lite-client-server.so: $(OBJ_COMMON) $(OBJ_CLIENT_SERVER) $(OBJ_CLOUD)
+ 	$(CC) -shared -o $@ $(OBJ_COMMON) $(OBJ_CLIENT_SERVER) $(OBJ_CLOUD) $(LIBS)
+@@ -301,6 +319,14 @@ client: libiotivity-lite-client.a $(ROOT_DIR)/apps/client_linux.c
+ 	@mkdir -p $@_creds
+ 	${CC} -o $@ ../../apps/client_linux.c libiotivity-lite-client.a -DOC_CLIENT ${CFLAGS} ${LIBS}
+ 
++euicc_easysetup_enrollee: libiotivity-lite-easysetup.a $(ROOT_DIR)/apps/euicc_easysetup_enrollee.c
++	@mkdir -p $@_creds
++	${CC} -o $@ $(ROOT_DIR)/apps/euicc_easysetup_enrollee.c libiotivity-lite-easysetup.a ${CFLAGS} ${LIBS}
++
++wifi_easysetup_enrollee: libiotivity-lite-easysetup.a $(ROOT_DIR)/apps/wifi_easysetup_enrollee.c
++	@mkdir -p $@_creds
++	${CC} -o $@ $(ROOT_DIR)/apps/wifi_easysetup_enrollee.c libiotivity-lite-easysetup.a ${CFLAGS} ${LIBS}
++
+ smart_lock: libiotivity-lite-client.a $(ROOT_DIR)/apps/smart_lock_linux.c
+ 	@mkdir -p $@_creds
+ 	${CC} -o $@ ../../apps/smart_lock_linux.c libiotivity-lite-client.a -DOC_CLIENT ${CFLAGS} ${LIBS}
+@@ -398,6 +424,15 @@ iotivity-lite-client-server.pc: iotivity-lite-client-server.pc.in
+ 		-e 's,@version@,$(VERSION),' \
+ 		-e 's,@extra_cflags@,$(EXTRA_CFLAGS),'
+ 
++iotivity-lite-easysetup.pc: iotivity-lite-easysetup.pc.in
++	$(SED) > $@ < $< \
++		-e 's,@prefix@,$(prefix),' \
++		-e 's,@exec_prefix@,$(exec_prefix),' \
++		-e 's,@libdir@,$(libdir),' \
++		-e 's,@includedir@,$(includedir),' \
++		-e 's,@version@,$(VERSION),' \
++		-e 's,@extra_cflags@,$(EXTRA_CFLAGS),'
++
+ ifneq ($(SECURE),0)
+ MBEDTLS_PATCHES ?= $(sort $(wildcard ../../patches/*.patch))
+ ${MBEDTLS_DIR}/.git:
+@@ -417,7 +452,7 @@ $(MBEDTLS_PATCH_FILE): ${MBEDTLS_DIR}/.git ${MBEDTLS_PATCHES}
+ endif
+ 
+ clean:
+-	rm -rf obj $(PC) $(CONSTRAINED_LIBS) $(API_TEST_OBJ_FILES) $(SECURITY_TEST_OBJ_FILES) $(PLATFORM_TEST_OBJ_FILES) $(MESSAGING_TEST_OBJ_FILES) $(UNIT_TESTS) $(STORAGE_TEST_DIR) $(CLOUD_TEST_OBJ_FILES) $(RD_CLIENT_TEST_OBJ_FILES)
++	rm -rf obj $(PC) $(CONSTRAINED_LIBS) $(API_TEST_OBJ_FILES) $(SECURITY_TEST_OBJ_FILES) $(PLATFORM_TEST_OBJ_FILES) $(MESSAGING_TEST_OBJ_FILES) $(UNIT_TESTS) $(STORAGE_TEST_DIR) $(CLOUD_TEST_OBJ_FILES) $(RD_CLIENT_TEST_OBJ_FILES) $(OBJ_ES)
+ 	rm -rf pki_certs
+ 
+ cleanall: clean
+diff --git a/port/linux/iotivity-lite-easysetup.pc.in b/port/linux/iotivity-lite-easysetup.pc.in
+new file mode 100644
+index 00000000..e9c08480
+--- /dev/null
++++ b/port/linux/iotivity-lite-easysetup.pc.in
+@@ -0,0 +1,25 @@
++# Copyright (c) 2019 Samsung Electronics
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#      http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++prefix=@prefix@
++exec_prefix=@exec_prefix@
++libdir=@libdir@
++includedir=@includedir@
++
++Name: iotivity-constrained-easysetup
++Description: Iotivity constrained easysetup library
++Version: @version@
++Libs.private: -lm -pthread
++Cflags: -I${includedir}/iotivity-constrained -DOC_EASYSETUP @extra_cflags@
++Libs: -L${libdir} -liotivity-constrained-easysetup
+diff --git a/port/linux/oc_config.h b/port/linux/oc_config.h
+index 273a2a8c..bd04b262 100644
+--- a/port/linux/oc_config.h
++++ b/port/linux/oc_config.h
+@@ -24,8 +24,7 @@ typedef uint64_t oc_clock_time_t;
+ #define OC_NETWORK_MONITOR
+ /* Add support for passing TCP/TLS/DTLS session connection events to the app */
+ #define OC_SESSION_EVENTS
+-#define OC_WIFI_EASYSETUP
+-#define OC_ESIM_EASYSETUP
++
+ /* Add support for software update */
+ //#define OC_SOFTWARE_UPDATE or run "make" with SWUPDATE=1
+ /* Add support for the oic.if.create interface in Collections */
+diff --git a/port/linux/wifi.c b/port/linux/wifi.c
+new file mode 100755
+index 00000000..013b3cae
+--- /dev/null
++++ b/port/linux/wifi.c
+@@ -0,0 +1,81 @@
++
++ /****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++#include <stdio.h>
++#include "wifi.h"
++
++int
++wifi_start_station(void)
++{
++  return 0;
++}
++
++int
++wifi_stop_station(void)
++{
++  return 0;
++}
++ 
++int 
++wifi_start_softap()
++{
++  return 0;
++}
++
++int 
++wifi_stop_softap(char *ssid, char *password, char *security, int channel)
++{
++  (void)(*ssid);
++  (void)(*password);
++  (void)(*security);
++  (void)channel;
++  return 0;
++}
++ 
++int
++wifi_join(char *ssid, char *password, char *security)
++{
++  (void)(*ssid);
++  (void)(*password);
++  (void)(*security);
++  return 0;
++}
++
++int 
++wifi_start_dhcp_client()
++{
++  return 0;
++}
++
++int 
++wifi_start_dhcp_server()
++{
++  return 0;
++}
++
++int 
++wifi_stop_dhcp_server()
++{
++  return 0;
++}
++
++int
++wifi_stop_dhcp_client() 
++{
++  return 0;
++}
+diff --git a/port/linux/wifi.h b/port/linux/wifi.h
+new file mode 100755
+index 00000000..ecaffaf7
+--- /dev/null
++++ b/port/linux/wifi.h
+@@ -0,0 +1,31 @@
++/****************************************************************************
++ *
++ * Copyright (c) 2019-2020 Samsung Electronics
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specificlanguage governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++#ifndef _WIFI_H_
++#define _WIFI_H_
++
++int wifi_start_station(void);
++int wifi_stop_station(void);
++int wifi_start_softap();
++int wifi_stop_softap(char *ssid, char *password, char *security, int channel);
++int wifi_join(char *ssid, char *password, char *security);
++int wifi_start_dhcp_client();
++int wifi_stop_dhcp_client();
++int wifi_start_dhcp_server();
++int wifi_stop_dhcp_server();
++
++#endif //_WIFI_H_
+diff --git a/port/tizenrt/Makefile b/port/tizenrt/Makefile
+index 64d5466b..29342fc5 100644
+--- a/port/tizenrt/Makefile
++++ b/port/tizenrt/Makefile
+@@ -102,6 +102,7 @@ CFLAGS+=-I${tinyara_dir}/include/
+ CFLAGS+=-I${topdir}
+ CFLAGS+=-I${topdir}/include/
+ CFLAGS+=-I.
++CFLAGS+=-I${topdir}/api/easysetup/
+ 
+ ifeq ($(IPV4),1)
+ 	CFLAGS += -DOC_IPV4
+-- 
+2.16.1.windows.1
+

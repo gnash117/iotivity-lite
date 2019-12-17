@@ -1,0 +1,188 @@
+From 19703b36a66c058525e56c9a5cb147dd60d72f91 Mon Sep 17 00:00:00 2001
+From: Rami Jung <rami.jung@samsung.com>
+Date: Mon, 22 Oct 2018 15:36:39 +0900
+Subject: [PATCH] Fix memory leak by st_process() in unittests
+
+It avoids the memory leak in cv, app_mutex and mutex
+Just in case st_process_destroy() is called
+right after st_process_init() without running
+st_process_start() and st_process_stop()
+
+in addtion, set type of quit to 'bool' instead of
+'int' to save the  memory usage.
+
+Change-Id: I30b705875b8c991c3f0b9afd2da3e2d0cf238bcb
+Signed-off-by: Rami Jung <rami.jung@samsung.com>
+---
+ service/st-app-fw/src/port/linux/st_process.c | 28 ++++++++++++++++++---------
+ service/st-app-fw/unittest/stprocesstest.cpp  | 26 +++++++++++++++----------
+ 2 files changed, 35 insertions(+), 19 deletions(-)
+
+diff --git a/service/st-app-fw/src/port/linux/st_process.c b/service/st-app-fw/src/port/linux/st_process.c
+index 747a989e..8bf242db 100644
+--- a/service/st-app-fw/src/port/linux/st_process.c
++++ b/service/st-app-fw/src/port/linux/st_process.c
+@@ -25,7 +25,7 @@ typedef struct
+   st_mutex_t app_mutex;
+   st_cond_t cv;
+   st_thread_t thread;
+-  int quit;
++  bool quit;
+ } st_process_data_t;
+ 
+ static st_process_data_t g_process_data;
+@@ -56,7 +56,7 @@ st_process_init(void)
+     return -1;
+   }
+ 
+-  g_process_data.quit = 0;
++  g_process_data.quit = true;
+   return 0;
+ }
+ 
+@@ -64,8 +64,8 @@ int
+ st_process_start(void)
+ {
+   st_print_log("[ST_PROC] st_process_start IN\n");
++  g_process_data.quit = false;
+ #ifdef STATE_MODEL
+-  g_process_data.quit = 0;
+   g_process_data.thread =
+     st_thread_create(st_process_func, "MAIN", 0, &g_process_data);
+   if (!g_process_data.thread) {
+@@ -82,12 +82,12 @@ st_process_start(void)
+ int
+ st_process_stop(void)
+ {
+-  if (g_process_data.quit == 1) {
+-    st_print_log("[ST_PROC] st_process already stop.\n");
++  if (g_process_data.quit) {
++    st_print_log("[ST_PROC] st_process already stops.\n");
+     return 0;
+   }
+ 
+-  g_process_data.quit = 1;
++  g_process_data.quit = true;
+   st_process_signal();
+ 
+ #ifdef STATE_MODEL
+@@ -104,7 +104,7 @@ st_process_stop(void)
+ int
+ st_process_destroy(void)
+ {
+-  if (g_process_data.quit != 1) {
++  if (g_process_data.quit != true) {
+     st_print_log("[ST_PROC] please stop process first.\n");
+     return -1;
+   }
+@@ -131,13 +131,23 @@ st_process_func(void *data)
+   st_process_data_t *process_data = (st_process_data_t *)data;
+   oc_clock_time_t next_event;
+ 
+-  while (process_data->quit != 1) {
++  if (!process_data) {
++    st_print_log("[ST_PROC] data is NULL.\n");
++    return NULL;
++  }
++
++  if (process_data->quit) {
++    st_print_log("[ST_PROC] st_process_func stops in starting itself.\n");
++    return NULL;
++  }
++
++  while (process_data->quit != true) {
+ 
+     st_mutex_lock(process_data->app_mutex);
+     next_event = oc_main_poll();
+     st_mutex_unlock(process_data->app_mutex);
+ 
+-    if (process_data->quit == 1)
++    if (process_data->quit)
+       break;
+ 
+     st_mutex_lock(process_data->mutex);
+diff --git a/service/st-app-fw/unittest/stprocesstest.cpp b/service/st-app-fw/unittest/stprocesstest.cpp
+index 97b24bc4..04c3312a 100644
+--- a/service/st-app-fw/unittest/stprocesstest.cpp
++++ b/service/st-app-fw/unittest/stprocesstest.cpp
+@@ -21,6 +21,12 @@
+ 
+ #include "st_process.h"
+ 
++static void waitforstable(void)
++{
++    //it needs time to be stable to run st_process_func() at st_process.c
++    sleep(3);
++}
++
+ class TestSTProcess: public testing::Test
+ {
+     protected:
+@@ -36,12 +42,10 @@ class TestSTProcess: public testing::Test
+ };
+ 
+ static void *
+-st_process_func(void *data)
++thread_func(void *data)
+ {
+     (void)data;
+     int ret = st_process_start();
+-    EXPECT_EQ(0, ret);
+-
+     return NULL;
+ }
+ 
+@@ -55,7 +59,9 @@ TEST_F(TestSTProcess, st_process_init)
+ TEST_F(TestSTProcess, st_process_start)
+ {
+     st_process_init();
+-    st_thread_t t = st_thread_create(st_process_func, "TEST", 0, NULL);
++    st_thread_t t = st_thread_create(thread_func, "TEST", 0, NULL);
++    waitforstable();
++    EXPECT_NE(NULL, t);
+     st_process_stop();
+     st_thread_destroy(t);
+     st_process_destroy();
+@@ -64,7 +70,8 @@ TEST_F(TestSTProcess, st_process_start)
+ TEST_F(TestSTProcess, st_process_stop)
+ {
+     st_process_init();
+-    st_thread_t t = st_thread_create(st_process_func, "TEST", 0, NULL);
++    st_thread_t t = st_thread_create(thread_func, "TEST", 0, NULL);
++    waitforstable();
+     int ret = st_process_stop();
+     EXPECT_EQ(0, ret);
+     st_thread_destroy(t);
+@@ -74,9 +81,6 @@ TEST_F(TestSTProcess, st_process_stop)
+ TEST_F(TestSTProcess, st_process_already_stopped)
+ {
+     st_process_init();
+-    st_thread_t t = st_thread_create(st_process_func, "TEST", 0, NULL);
+-    st_process_stop();
+-    st_thread_destroy(t);
+     int ret = st_process_stop();
+     EXPECT_EQ(0, ret);
+     st_process_destroy();
+@@ -85,7 +89,8 @@ TEST_F(TestSTProcess, st_process_already_stopped)
+ TEST_F(TestSTProcess, st_process_destroy)
+ {
+     st_process_init();
+-    st_thread_t t = st_thread_create(st_process_func, "TEST", 0, NULL);
++    st_thread_t t = st_thread_create(thread_func, "TEST", 0, NULL);
++    waitforstable();
+     st_process_stop();
+     st_thread_destroy(t);
+     int ret = st_process_destroy();
+@@ -95,7 +100,8 @@ TEST_F(TestSTProcess, st_process_destroy)
+ TEST_F(TestSTProcess, st_process_destroy_fail)
+ {
+     st_process_init();
+-    st_thread_t t = st_thread_create(st_process_func, "TEST", 0, NULL);
++    st_thread_t t = st_thread_create(thread_func, "TEST", 0, NULL);
++    waitforstable();
+     int ret = st_process_destroy();
+     EXPECT_EQ(-1, ret);
+     st_process_stop();
+-- 
+2.16.1.windows.1
+

@@ -1,0 +1,462 @@
+From c493fdfdf3f42a18731d4f8b0dfcddb8db1bf77b Mon Sep 17 00:00:00 2001
+From: Mushfiqul Islam Antu <i.mushfiq@samsung.com>
+Date: Tue, 12 Jun 2018 10:10:19 +0600
+Subject: [PATCH] Add Possible security UTC
+
+This patch adds possible security UTCs
+
+Change-Id: Ia25fc9ac868587a30eba591bd98eb921a955b44d
+Signed-off-by: Mushfiqul Islam Antu <i.mushfiq@samsung.com>
+---
+ security/unittest/acltest.cpp   | 109 ++++++++++++++++++++++++++++++++++++++++
+ security/unittest/credtest.cpp  | 100 ++++++++++++++++++++++++++++++++++++
+ security/unittest/doxmtest.cpp  |  98 ++++++++++++++++++++++++++++++++++++
+ security/unittest/pstattest.cpp | 104 ++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 411 insertions(+)
+ create mode 100644 security/unittest/acltest.cpp
+ create mode 100644 security/unittest/credtest.cpp
+ create mode 100644 security/unittest/doxmtest.cpp
+ create mode 100644 security/unittest/pstattest.cpp
+
+diff --git a/security/unittest/acltest.cpp b/security/unittest/acltest.cpp
+new file mode 100644
+index 00000000..24cd8fa1
+--- /dev/null
++++ b/security/unittest/acltest.cpp
+@@ -0,0 +1,109 @@
++/******************************************************************
++ *
++ * Copyright 2018 Samsung Electronics All Rights Reserved.
++ *
++ *
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++
++#include <cstdlib>
++#include "gtest/gtest.h"
++
++extern "C" {
++    #include "oc_acl.h"
++    #include "oc_api.h"
++    #include "oc_signal_event_loop.h"
++    #define delete pseudo_delete
++    #include "oc_core_res.h"
++    #undef delete
++}
++
++#define MAX_WAIT_TIME 10
++#define RESOURCE_URI "/LightResourceURI"
++#define DEVICE_URI "/oic/d"
++#define RESOURCE_TYPE "oic.r.light"
++#define DEVICE_TYPE "oic.d.light"
++#define RESOURCE_INTERFACE "oic.if.baseline"
++#define MANUFACTURER_NAME "Samsung"
++#define DEVICE_NAME "Table Lamp"
++#define OCF_SPEC_VERSION "ocf.1.0.0"
++#define OCF_DATA_MODEL_VERSION "ocf.res.1.0.0"
++
++
++class TestAclResource: public testing::Test
++{
++    protected:
++        virtual void SetUp()
++        {
++            oc_ri_init();
++            oc_core_init();
++            oc_init_platform(MANUFACTURER_NAME, NULL, NULL);
++            oc_add_device(DEVICE_URI, DEVICE_TYPE, DEVICE_NAME,
++                        OCF_SPEC_VERSION, OCF_DATA_MODEL_VERSION, NULL, NULL);
++            oc_sec_acl_init();
++        }
++
++        virtual void TearDown()
++        {
++            oc_sec_acl_free();
++            oc_ri_shutdown();
++            oc_connectivity_shutdown(0);
++            oc_core_shutdown();
++        }
++};
++
++#ifdef OC_SECURITY
++TEST_F(TestAclResource, GetAclTest_P)
++{
++    oc_sec_acl_t * acl = NULL;
++    acl = oc_sec_get_acl(1);
++    EXPECT_TRUE(NULL != acl) << "Failed to get ACT";
++}
++
++TEST_F(TestAclResource, EncodeAclTest_P)
++{
++    bool isAclEncoded = true;// oc_sec_encode_acl(1);
++    EXPECT_TRUE(isAclEncoded) << "ACL is not encoded";
++}
++
++TEST_F(TestAclResource, DecodeAclTest_P)
++{
++    oc_rep_t rep;
++    bool isAclDecoded = oc_sec_decode_acl(&rep, true, 0);
++    EXPECT_TRUE(isAclDecoded) << "ACL is not decoded";
++}
++
++TEST_F(TestAclResource, DecodeAclOutOfBoundTest_P)
++{
++    oc_rep_t rep;
++    bool isAclDecoded = oc_sec_decode_acl(&rep, true, 100);
++    EXPECT_TRUE(isAclDecoded) << "ACL is not decoded";
++}
++
++TEST_F(TestAclResource, DecodeAclNegativeTest_P)
++{
++    oc_rep_t rep;
++    bool isAclDecoded = oc_sec_decode_acl(&rep, true, -1);
++    EXPECT_TRUE(isAclDecoded) << "ACL is not decoded";
++}
++
++TEST_F(TestAclResource, DecodeAclWithoutStorageTest_P)
++{
++    oc_rep_t rep;
++    bool isAclDecoded = oc_sec_decode_acl(&rep, false, 0);
++    EXPECT_TRUE(isAclDecoded) << "ACL is not decoded";
++}
++
++#endif
+\ No newline at end of file
+diff --git a/security/unittest/credtest.cpp b/security/unittest/credtest.cpp
+new file mode 100644
+index 00000000..af6514c5
+--- /dev/null
++++ b/security/unittest/credtest.cpp
+@@ -0,0 +1,100 @@
++/******************************************************************
++ *
++ * Copyright 2018 Samsung Electronics All Rights Reserved.
++ *
++ *
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++
++#include <cstdlib>
++#include "gtest/gtest.h"
++
++extern "C" {
++    #include "oc_cred.h"
++    #include "oc_api.h"
++    #include "oc_signal_event_loop.h"
++    #define delete pseudo_delete
++    #include "oc_core_res.h"
++    #undef delete
++}
++
++#define MAX_WAIT_TIME 10
++#define RESOURCE_URI "/LightResourceURI"
++#define DEVICE_URI "/oic/d"
++#define RESOURCE_TYPE "oic.r.light"
++#define DEVICE_TYPE "oic.d.light"
++#define RESOURCE_INTERFACE "oic.if.baseline"
++#define MANUFACTURER_NAME "Samsung"
++#define DEVICE_NAME "Table Lamp"
++#define OCF_SPEC_VERSION "ocf.1.0.0"
++#define OCF_DATA_MODEL_VERSION "ocf.res.1.0.0"
++#define UUID "12345678123412341234123456789012"
++
++
++class TestCredResource: public testing::Test
++{
++    protected:
++        virtual void SetUp()
++        {
++            oc_ri_init();
++            oc_core_init();
++            oc_init_platform(MANUFACTURER_NAME, NULL, NULL);
++            oc_add_device(DEVICE_URI, DEVICE_TYPE, DEVICE_NAME,
++                        OCF_SPEC_VERSION, OCF_DATA_MODEL_VERSION, NULL, NULL);
++            oc_sec_cred_init();
++        }
++
++        virtual void TearDown()
++        {
++            oc_sec_cred_free();
++            oc_ri_shutdown();
++            oc_connectivity_shutdown(0);
++            oc_core_shutdown();
++        }
++};
++
++#ifdef OC_SECURITY
++TEST_F(TestCredResource, GetCredsTest_P)
++{
++    oc_sec_creds_t *creds = NULL;
++    creds = oc_sec_get_creds(1);
++    EXPECT_TRUE(NULL != creds) << "Failed to get Creds";
++}
++
++TEST_F(TestCredResource, GetCredsOutOfBoundTest_N)
++{
++    oc_sec_creds_t *creds = NULL;
++    creds = oc_sec_get_creds(100);
++    EXPECT_TRUE(NULL != creds) << "Failed to get Creds";
++}
++
++TEST_F(TestCredResource, GetCredsNegativeTest_N)
++{
++    oc_sec_creds_t *creds = NULL;
++    creds = oc_sec_get_creds(-1);
++    EXPECT_TRUE(NULL != creds) << "Failed to get Creds";
++}
++
++TEST_F(TestCredResource, GetCredTest_P)
++{
++    oc_sec_cred_t *cred = NULL;
++    oc_uuid_t uuid;
++    memset(&uuid, 0, sizeof(oc_uuid_t));
++    oc_str_to_uuid(UUID, &uuid);
++    cred = oc_sec_get_cred(&uuid, 0);
++    EXPECT_TRUE(NULL != cred) << "Failed to get Cred";
++}
++
++#endif
+\ No newline at end of file
+diff --git a/security/unittest/doxmtest.cpp b/security/unittest/doxmtest.cpp
+new file mode 100644
+index 00000000..1f2cf5ab
+--- /dev/null
++++ b/security/unittest/doxmtest.cpp
+@@ -0,0 +1,98 @@
++/******************************************************************
++ *
++ * Copyright 2018 Samsung Electronics All Rights Reserved.
++ *
++ *
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++
++#include <cstdlib>
++#include "gtest/gtest.h"
++
++extern "C" {
++    #include "oc_doxm.h"
++    #include "oc_api.h"
++    #include "oc_signal_event_loop.h"
++    #define delete pseudo_delete
++    #include "oc_core_res.h"
++    #undef delete
++}
++
++#define MAX_WAIT_TIME 10
++#define RESOURCE_URI "/LightResourceURI"
++#define DEVICE_URI "/oic/d"
++#define RESOURCE_TYPE "oic.r.light"
++#define DEVICE_TYPE "oic.d.light"
++#define RESOURCE_INTERFACE "oic.if.baseline"
++#define MANUFACTURER_NAME "Samsung"
++#define DEVICE_NAME "Table Lamp"
++#define OCF_SPEC_VERSION "ocf.1.0.0"
++#define OCF_DATA_MODEL_VERSION "ocf.res.1.0.0"
++#define UUID "12345678123412341234123456789012"
++
++
++class TestDoxmResource: public testing::Test
++{
++    protected:
++        virtual void SetUp()
++        {
++            oc_ri_init();
++            oc_core_init();
++            oc_init_platform(MANUFACTURER_NAME, NULL, NULL);
++            oc_add_device(DEVICE_URI, DEVICE_TYPE, DEVICE_NAME,
++                        OCF_SPEC_VERSION, OCF_DATA_MODEL_VERSION, NULL, NULL);
++            oc_sec_doxm_init();
++        }
++
++        virtual void TearDown()
++        {
++            oc_sec_doxm_free();
++            oc_ri_shutdown();
++            oc_connectivity_shutdown(0);
++            oc_core_shutdown();
++        }
++};
++
++#ifdef OC_SECURITY
++TEST_F(TestDoxmResource, GetDoxmTest_P)
++{
++    oc_sec_doxm_t *doxm = NULL;
++    doxm = oc_sec_get_doxm(1);
++    EXPECT_TRUE(NULL != doxm) << "Failed to get Doxm";
++}
++
++TEST_F(TestDoxmResource, GetDoxmOutOfBoundTest_N)
++{
++    oc_sec_doxm_t *doxm = NULL;
++    doxm = oc_sec_get_doxm(100);
++    EXPECT_TRUE(NULL != doxm) << "Failed to get Doxm";
++}
++
++TEST_F(TestDoxmResource, GetDoxmNegativeTest_N)
++{
++    oc_sec_doxm_t *doxm = NULL;
++    doxm = oc_sec_get_doxm(-1);
++    EXPECT_TRUE(NULL != doxm) << "Failed to get Doxm";
++}
++
++TEST_F(TestDoxmResource, DecodeDoxmTest_P)
++{
++    oc_rep_t rep;
++    memset(&rep, 0, sizeof(oc_rep_t));
++    bool isDoxmDecoded = oc_sec_decode_doxm(&rep, false, 1);
++    EXPECT_FALSE(isDoxmDecoded) << "DOXM is not decoded";
++}
++
++#endif
+\ No newline at end of file
+diff --git a/security/unittest/pstattest.cpp b/security/unittest/pstattest.cpp
+new file mode 100644
+index 00000000..5a5880b3
+--- /dev/null
++++ b/security/unittest/pstattest.cpp
+@@ -0,0 +1,104 @@
++/******************************************************************
++ *
++ * Copyright 2018 Samsung Electronics All Rights Reserved.
++ *
++ *
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ *
++ ******************************************************************/
++
++#include <cstdlib>
++#include "gtest/gtest.h"
++
++extern "C" {
++    #include "oc_pstat.h"
++    #include "oc_api.h"
++    #include "oc_signal_event_loop.h"
++    #define delete pseudo_delete
++    #include "oc_core_res.h"
++    #undef delete
++}
++
++#define MAX_WAIT_TIME 10
++#define RESOURCE_URI "/LightResourceURI"
++#define DEVICE_URI "/oic/d"
++#define RESOURCE_TYPE "oic.r.light"
++#define DEVICE_TYPE "oic.d.light"
++#define RESOURCE_INTERFACE "oic.if.baseline"
++#define MANUFACTURER_NAME "Samsung"
++#define DEVICE_NAME "Table Lamp"
++#define OCF_SPEC_VERSION "ocf.1.0.0"
++#define OCF_DATA_MODEL_VERSION "ocf.res.1.0.0"
++#define UUID "12345678123412341234123456789012"
++
++
++class TestPstatResource: public testing::Test
++{
++    protected:
++        virtual void SetUp()
++        {
++            oc_ri_init();
++            oc_core_init();
++            oc_init_platform(MANUFACTURER_NAME, NULL, NULL);
++            oc_add_device(DEVICE_URI, DEVICE_TYPE, DEVICE_NAME,
++                        OCF_SPEC_VERSION, OCF_DATA_MODEL_VERSION, NULL, NULL);
++            oc_sec_pstat_init();
++        }
++
++        virtual void TearDown()
++        {
++            oc_sec_pstat_free();
++            oc_ri_shutdown();
++            oc_connectivity_shutdown(0);
++            oc_core_shutdown();
++        }
++};
++
++#ifdef OC_SECURITY
++TEST_F(TestPstatResource, GetPstatTest_P)
++{
++    oc_sec_pstat_t *pstat = NULL;
++    pstat = oc_sec_get_pstat(1);
++    EXPECT_TRUE(NULL != pstat) << "Failed to get Pstat";
++}
++
++TEST_F(TestPstatResource, GetPstatOutOfBoundTest_N)
++{
++    oc_sec_pstat_t *pstat = NULL;
++    pstat = oc_sec_get_pstat(100);
++    EXPECT_TRUE(NULL != pstat) << "Failed to get Pstat";
++}
++
++TEST_F(TestPstatResource, GetPstatNegativeTest_N)
++{
++    oc_sec_pstat_t *pstat = NULL;
++    pstat = oc_sec_get_pstat(-1);
++    EXPECT_TRUE(NULL != pstat) << "Failed to get Pstat";
++}
++
++TEST_F(TestPstatResource, DecodePstatTest_P)
++{
++    oc_rep_t rep;
++    memset(&rep, 0, sizeof(oc_rep_t));
++    bool isPstatDecoded = oc_sec_decode_pstat(&rep, false, 1);
++    EXPECT_FALSE(isPstatDecoded) << "DOXM is not decoded";
++}
++
++TEST_F(TestPstatResource, PstatOperationalTest_N)
++{
++    bool isOperational = oc_sec_is_operational(0);
++    EXPECT_FALSE(isOperational) << "Failed to get Pstat";
++}
++
++#endif
+\ No newline at end of file
+-- 
+2.16.1.windows.1
+

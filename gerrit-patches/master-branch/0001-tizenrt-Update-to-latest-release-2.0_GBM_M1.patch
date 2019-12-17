@@ -1,0 +1,28 @@
+From d3fc5064abfa38d02680935dea853d717cbc3749 Mon Sep 17 00:00:00 2001
+From: Philippe Coval <p.coval@samsung.com>
+Date: Thu, 31 May 2018 15:17:37 +0200
+Subject: [PATCH] tizenrt: Update to latest release (2.0_GBM_M1)
+
+Bug: https://jira.iotivity.org/projects/LITE/issues/LITE-4
+Change-Id: I82eb74845879cc1c7442a8986471b915e9efa0e7
+Signed-off-by: Philippe Coval <p.coval@samsung.com>
+---
+ tests/port/tizenrt/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/port/tizenrt/Makefile b/tests/port/tizenrt/Makefile
+index 31197da5..313b93f4 100644
+--- a/tests/port/tizenrt/Makefile
++++ b/tests/port/tizenrt/Makefile
+@@ -29,7 +29,7 @@ app_dir?=${top_dir}/port/tizenrt
+ tizenrt_dir?=${top_dir}/deps/TizenRT
+ os_dir?=${tizenrt_dir}/os
+ os_url?=https://github.com/Samsung/TizenRT
+-os_branch?=1.1_Public_Release
++os_branch?=2.0_GBM_M1
+ os_machine?=artik053
+ os_image_type?=minimal
+ configure_file?=${os_dir}/.config
+-- 
+2.16.1.windows.1
+

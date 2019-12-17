@@ -19,3 +19,6 @@
 # Denote all files that are truly binary and should not be modified.
 *.png binary
 *.jpg binary
+
+# unknown if patch files are truly binary but don't want the patches to have lines endings changed
+*.patch binary

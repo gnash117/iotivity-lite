@@ -1,0 +1,27 @@
+From a01abbafb2c0f6a15ef051f2a042e83453acf6a4 Mon Sep 17 00:00:00 2001
+From: Uze Choi <uzchoi@samsung.com>
+Date: Mon, 9 Jul 2018 04:30:33 +0000
+Subject: [PATCH] Revert "tizenrt: Select LWIP if config enabled"
+
+This reverts commit f4b21d93c2a920400b770016c4120c49f953e20d.
+
+Change-Id: I79f2dfb702abcef031694db012f0537f0b5325b7
+---
+ tests/port/tizenrt/iotivity-constrained.Kconfig | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/tests/port/tizenrt/iotivity-constrained.Kconfig b/tests/port/tizenrt/iotivity-constrained.Kconfig
+index 1b545c51..9b24f6ce 100644
+--- a/tests/port/tizenrt/iotivity-constrained.Kconfig
++++ b/tests/port/tizenrt/iotivity-constrained.Kconfig
+@@ -6,7 +6,6 @@
+ config ENABLE_IOTIVITY_CONSTRAINED
+ 	bool "IoTivity Constrained"
+ 	default n
+-        select NET_LWIP
+ 	---help---
+ 		Enable IoTivity-constrained framework
+ 
+-- 
+2.16.1.windows.1
+

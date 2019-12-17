@@ -1,0 +1,28 @@
+From 242bb637cc66bc23a23683015b0cf64de857e53e Mon Sep 17 00:00:00 2001
+From: Philippe Coval <p.coval@samsung.com>
+Date: Mon, 18 Jun 2018 12:10:59 +0200
+Subject: [PATCH] tizenrt: Try to build on debian i386
+
+Bug: https://jira.iotivity.org/projects/LITE/issues/LITE-4
+Change-Id: Iade4d1554101bd8e073a67ad34d4168c5b67da04
+Signed-off-by: Philippe Coval <p.coval@samsung.com>
+---
+ tests/port/tizenrt/Dockerfile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/tests/port/tizenrt/Dockerfile b/tests/port/tizenrt/Dockerfile
+index 7b612d7c..be465b70 100755
+--- a/tests/port/tizenrt/Dockerfile
++++ b/tests/port/tizenrt/Dockerfile
+@@ -16,7 +16,7 @@
+ # limitations under the License.
+ #}
+ 
+-FROM debian:stable
++FROM i386/debian:stable
+ MAINTAINER Philippe Coval (philippe.coval@osg.samsung.com)
+ 
+ ENV DEBIAN_FRONTEND noninteractive
+-- 
+2.16.1.windows.1
+

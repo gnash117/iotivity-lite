@@ -1,0 +1,29 @@
+From 051be9da79a6225419eabd1fee4b1be7b44580db Mon Sep 17 00:00:00 2001
+From: Philippe Coval <p.coval@samsung.com>
+Date: Fri, 6 Jul 2018 12:25:59 +0200
+Subject: [PATCH] linux: Exit on 1st failed test
+
+It looked like set -e was not trapped ?
+
+Change-Id: Ib15b104aebbcbba1e54714ce31e69a94243db73a
+Signed-off-by: Philippe Coval <p.coval@samsung.com>
+---
+ port/linux/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/port/linux/Makefile b/port/linux/Makefile
+index ebbf9238..2e9f63fb 100644
+--- a/port/linux/Makefile
++++ b/port/linux/Makefile
+@@ -257,7 +257,7 @@ all: $(CONSTRAINED_LIBS) $(SAMPLES) $(PC)
+ 
+ test: $(UNIT_TESTS)
+ 	set -e
+-	for test in $^ ; do ./$${test} ; done
++	for test in $^ ; do ./$${test} || exit $? ; done
+ 
+ .PHONY: test clean
+ 
+-- 
+2.16.1.windows.1
+

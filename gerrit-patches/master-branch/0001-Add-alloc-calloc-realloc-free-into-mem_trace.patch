@@ -1,0 +1,540 @@
+From a276b2fd0a8c3c4f43bff663a8bc55d62e210d4a Mon Sep 17 00:00:00 2001
+From: iot <rami.jung@samsung.com>
+Date: Mon, 14 May 2018 22:35:51 +0900
+Subject: [PATCH] Add alloc/calloc/realloc/free  into mem_trace
+
+module/app developers are supposed to ues these api
+ instead of malloc/calloc/realloc/free
+
+Change-Id: I08eada363f9e9a236499196978eb59450ce05500
+Signed-off-by: iot <rami.jung@samsung.com>
+---
+ util/oc_mem.c       | 180 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ util/oc_mem.h       |  69 ++++++++++++++++++++
+ util/oc_mem_trace.c |  29 ++++++---
+ util/oc_mem_trace.h |   3 +-
+ util/oc_memb.c      |  33 ++++++----
+ util/oc_mmem.c      |  46 +++++++-------
+ 6 files changed, 314 insertions(+), 46 deletions(-)
+ create mode 100644 util/oc_mem.c
+ create mode 100644 util/oc_mem.h
+
+diff --git a/util/oc_mem.c b/util/oc_mem.c
+new file mode 100644
+index 00000000..a95db355
+--- /dev/null
++++ b/util/oc_mem.c
+@@ -0,0 +1,180 @@
++/****************************************************************************
++ *
++ * Copyright 2018 Samsung Electronics All Rights Reserved.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
++ * either express or implied. See the License for the specific
++ * language governing permissions and limitations under the License.
++ *
++ ****************************************************************************/
++
++#ifdef OC_DYNAMIC_ALLOCATION
++
++#include "oc_list.h"
++#include "port/oc_log.h"
++#include <stdio.h>
++#include <stdlib.h>
++
++#ifdef OC_MEMORY_TRACE
++#include "oc_mem_trace.h"
++
++typedef struct _mem_item
++{
++  struct mem_item_s *next;
++  size_t mem_size;
++  void *mem_address;
++} mem_item_s;
++
++OC_LIST(mem_list);
++
++static mem_item_s *
++oc_mem_list_search(void *address)
++{
++
++  mem_item_s *obs = (mem_item_s *)oc_list_head(mem_list), *next = NULL;
++
++  while (obs) {
++    next = oc_list_item_next(obs);
++    if (obs->mem_address == address) {
++      return obs;
++    }
++    obs = next;
++  }
++
++  return NULL;
++}
++#endif /* OC_MEMORY_TRACE */
++
++void *
++_oc_mem_malloc(
++#ifdef OC_MEMORY_TRACE
++  const char *func,
++#endif
++  size_t size)
++{
++  void *ptr = malloc(size);
++
++#ifdef OC_MEMORY_TRACE
++  if (!ptr)
++    return NULL;
++
++  mem_item_s *mem_item = calloc(1, sizeof(mem_item_s));
++  if (!mem_item) {
++    OC_ERR("insufficient memory to create new mem_item");
++    return ptr;
++  }
++
++  mem_item->mem_size = size;
++  mem_item->mem_address = ptr;
++  oc_list_push(mem_list, mem_item);
++
++  oc_mem_trace_add_pace(func, size, MEM_TRACE_ALLOC, ptr);
++#endif /* OC_MEMORY_TRACE */
++
++  return ptr;
++}
++
++void *
++_oc_mem_calloc(
++#ifdef OC_MEMORY_TRACE
++  const char *func,
++#endif
++  size_t num, size_t calloc_size)
++{
++  void *ptr = calloc(num, calloc_size);
++
++#ifdef OC_MEMORY_TRACE
++  if (!ptr)
++    return NULL;
++
++  mem_item_s *mem_item = calloc(1, sizeof(mem_item_s));
++  if (!mem_item) {
++    OC_ERR("insufficient memory to create new mem_item");
++    return ptr;
++  }
++
++  mem_item->mem_size = calloc_size * num;
++  mem_item->mem_address = ptr;
++  oc_list_push(mem_list, mem_item);
++
++  oc_mem_trace_add_pace(func, calloc_size * num, MEM_TRACE_ALLOC, ptr);
++
++#endif /* OC_MEMORY_TRACE */
++  return ptr;
++}
++
++void *
++_oc_mem_realloc(
++#ifdef OC_MEMORY_TRACE
++  const char *func,
++#endif
++  void *realloc_ptr, size_t realloc_size)
++{
++  void *ptr = realloc(realloc_ptr, realloc_size);
++
++#ifdef OC_MEMORY_TRACE
++  if (!ptr)
++    return NULL;
++
++  mem_item_s *mem_item = NULL;
++  mem_item = oc_mem_list_search(realloc_ptr);
++
++  if (mem_item) {
++    oc_mem_trace_add_pace(func, mem_item->mem_size, MEM_TRACE_FREE,
++                          mem_item->mem_address);
++  } else {
++    mem_item = calloc(1, sizeof(mem_item_s));
++    if (!mem_item) {
++      OC_ERR("insufficient memory to create new mem_item");
++      return ptr;
++    }
++  }
++
++  mem_item->mem_size = realloc_size;
++  mem_item->mem_address = ptr;
++  oc_list_push(mem_list, mem_item);
++
++  oc_mem_trace_add_pace(func, realloc_size, MEM_TRACE_REALLOC, ptr);
++
++#endif /* OC_MEMORY_TRACE */
++  return ptr;
++}
++
++void
++_oc_mem_free(
++#ifdef OC_MEMORY_TRACE
++  const char *func,
++#endif
++  void *ptr)
++{
++  free(ptr);
++
++#ifdef OC_MEMORY_TRACE
++  size_t size = 0;
++  mem_item_s *mem_item = NULL;
++  mem_item = oc_mem_list_search(ptr);
++  if (mem_item) {
++    size = mem_item->mem_size;
++    oc_list_remove(mem_list, mem_item);
++  } else {
++    OC_ERR("mem_list doesn't have %x to free", ptr);
++  }
++  oc_mem_trace_add_pace(func, size, MEM_TRACE_FREE, ptr);
++#endif /* OC_MEMORY_TRACE */
++}
++#else  /* !OC_DYNAMIC_ALLOCATION */
++// TODO : it would be removed if OC_DYNAMIC_ALLOCATION=0 excludes compiling this
++// file
++void
++dummy_null_mem_func(void)
++{
++}
++#endif /* OC_DYNAMIC_ALLOCATION */
+\ No newline at end of file
+diff --git a/util/oc_mem.h b/util/oc_mem.h
+new file mode 100644
+index 00000000..40256870
+--- /dev/null
++++ b/util/oc_mem.h
+@@ -0,0 +1,69 @@
++/****************************************************************************
++ *
++ * Copyright 2018 Samsung Electronics All Rights Reserved.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ * http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing,
++ * software distributed under the License is distributed on an
++ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
++ * either express or implied. See the License for the specific
++ * language governing permissions and limitations under the License.
++ *
++ ****************************************************************************/
++
++#ifndef OC_MEM_H
++#define OC_MEM_H
++
++#ifdef OC_DYNAMIC_ALLOCATION
++
++void *_oc_mem_malloc(
++#ifdef OC_MEMORY_TRACE
++  const char *func,
++#endif
++  size_t size);
++
++void *_oc_mem_calloc(
++#ifdef OC_MEMORY_TRACE
++  const char *func,
++#endif
++  size_t num, size_t calloc_size);
++
++void *_oc_mem_realloc(
++#ifdef OC_MEMORY_TRACE
++  const char *func,
++#endif
++  void *realloc_ptr, size_t realloc_size);
++
++void *_oc_mem_free(
++#ifdef OC_MEMORY_TRACE
++  const char *func,
++#endif
++  void *ptr);
++
++#ifdef OC_MEMORY_TRACE
++#define oc_mem_malloc(size) (void *)_oc_mem_malloc(__func__, size)
++#define oc_mem_calloc(num, size) (void *)_oc_mem_calloc(__func__, num, size)
++#define oc_mem_realloc(ptr, size) (void *)_oc_mem_realloc(__func__, ptr, size)
++#define oc_mem_free(ptr) _oc_mem_free(__func__, ptr)
++#else
++#define oc_mem_malloc(size) (void *)_oc_mem_malloc(size)
++#define oc_mem_calloc(num, size) (void *)_oc_mem_calloc(num, size)
++#define oc_mem_realloc(ptr, size) (void *)_oc_mem_realloc(ptr, size)
++#define oc_mem_free(ptr) _oc_mem_free(ptr)
++#endif /* OC_MEMORY_TRACE */
++
++#else /* !OC_DYNAMIC_ALLOCATION */
++
++#define oc_mem_malloc(size) NULL
++#define oc_mem_calloc(num, size) NULL
++#define oc_mem_realloc(ptr, size) NULL
++#define oc_mem_free(ptr) ((void)ptr)
++
++#endif /* OC_DYNAMIC_ALLOCATION */
++
++#endif /* OC_MEM_H */
+\ No newline at end of file
+diff --git a/util/oc_mem_trace.c b/util/oc_mem_trace.c
+index 0159fd3c..527db4a0 100644
+--- a/util/oc_mem_trace.c
++++ b/util/oc_mem_trace.c
+@@ -39,9 +39,9 @@ typedef struct _mem_logger
+ {
+   struct mem_logger_s *next; /* for LIST */
+   char func[FUNC_NAME_LEN + 1];
+-  int size;
+-  int current;
+-  int peak;
++  size_t size;
++  size_t current;
++  size_t peak;
+   int type; // MEM_TRACE_ALLOC, MEM_TRACE_FREE
+   void *address;
+ } mem_logger_s;
+@@ -70,7 +70,7 @@ void
+ oc_mem_trace_add_pace(const char *func, int size, int type, void *address)
+ {
+ 
+-  if (type == MEM_TRACE_ALLOC) {
++  if (type == MEM_TRACE_ALLOC || type == MEM_TRACE_REALLOC) {
+     mInfo.current += size;
+     if (mInfo.current > mInfo.peak) {
+       mInfo.peak = mInfo.current;
+@@ -120,11 +120,20 @@ oc_mem_trace_print_paces(void)
+   PRINT("-----------------\n");
+ 
+   while (mem_log_item_link) {
+-    PRINT(" %3d   %-26.25s  %10p   %5d   %5s    %5d    %5d\n", ++cnt,
+-          mem_log_item_link->func, mem_log_item_link->address,
+-          mem_log_item_link->size,
+-          (mem_log_item_link->type == MEM_TRACE_FREE) ? "Free" : "Alloc",
+-          mem_log_item_link->current, mem_log_item_link->peak);
++    PRINT(" %3d   %-26.25s  %10p   %5d", ++cnt, mem_log_item_link->func,
++          mem_log_item_link->address, mem_log_item_link->size);
++
++    if (mem_log_item_link->type == MEM_TRACE_FREE)
++      PRINT("   %7s", "Free");
++    else if (mem_log_item_link->type == MEM_TRACE_ALLOC)
++      PRINT("   %7s", "Alloc");
++    else if (mem_log_item_link->type == MEM_TRACE_REALLOC)
++      PRINT("   %7s", "Realloc");
++    else
++      PRINT("   %7s", "Unknown");
++
++    PRINT("    %5d    %5d\n", mem_log_item_link->current,
++          mem_log_item_link->peak);
+ 
+     mem_log_item_link = oc_list_item_next(mem_log_item_link);
+   }
+@@ -163,7 +172,7 @@ oc_mem_trace_free(void)
+ #else  /* OC_MEMORY_TRACE */
+ // TODO : it would be removed if MEMTRACE=0 excludes compiling this file
+ void
+-dummy_null_func(void)
++dummy_null_mem_trace_func(void)
+ {
+ }
+ #endif /* !OC_MEMORY_TRACE */
+diff --git a/util/oc_mem_trace.h b/util/oc_mem_trace.h
+index 025e1aed..e0ac8523 100644
+--- a/util/oc_mem_trace.h
++++ b/util/oc_mem_trace.h
+@@ -19,7 +19,8 @@
+ #ifndef OC_MEM_TRACE_H
+ #define OC_MEM_TRACE_H
+ 
+-#define MEM_TRACE_ALLOC (1) // it would be combination when BYTE, INT, DOUBLE
++#define MEM_TRACE_REALLOC (2)
++#define MEM_TRACE_ALLOC (1)
+ #define MEM_TRACE_FREE (0)
+ 
+ void oc_mem_trace_init(void);
+diff --git a/util/oc_memb.c b/util/oc_memb.c
+index 6b319973..5b991e68 100644
+--- a/util/oc_memb.c
++++ b/util/oc_memb.c
+@@ -40,6 +40,10 @@
+ #include "oc_mem_trace.h"
+ #endif
+ 
++#ifdef OC_DYNAMIC_ALLOCATION
++#include "oc_mem.h"
++#endif
++
+ /*---------------------------------------------------------------------------*/
+ void
+ oc_memb_init(struct oc_memb *m)
+@@ -81,7 +85,12 @@ _oc_memb_alloc(
+ 
+     if (i < m->num) {
+ #ifdef OC_DYNAMIC_ALLOCATION
+-      ptr = calloc(1, m->size);
++
++#ifdef OC_MEMORY_TRACE
++      ptr = _oc_mem_calloc(func, 1, m->size);
++#else
++      ptr = _oc_mem_calloc(1, m->size);
++#endif
+       void *slot = (void *)((char *)m->mem + (i * sizeof(void *)));
+       memcpy(slot, &ptr, sizeof(void *));
+ #else  /* OC_DYNAMIC_ALLOCATION */
+@@ -92,7 +101,11 @@ _oc_memb_alloc(
+   }
+ #ifdef OC_DYNAMIC_ALLOCATION
+   else {
+-    ptr = calloc(1, m->size);
++#ifdef OC_MEMORY_TRACE
++    ptr = _oc_mem_calloc(func, 1, m->size);
++#else
++    ptr = _oc_mem_calloc(1, m->size);
++#endif
+   }
+ #endif /* OC_DYNAMIC_ALLOCATION */
+ 
+@@ -102,10 +115,6 @@ _oc_memb_alloc(
+     return NULL;
+   }
+ 
+-#ifdef OC_MEMORY_TRACE
+-  oc_mem_trace_add_pace(func, m->size, MEM_TRACE_ALLOC, ptr);
+-#endif
+-
+   return ptr;
+ }
+ /*---------------------------------------------------------------------------*/
+@@ -121,10 +130,6 @@ _oc_memb_free(
+     return -1;
+   }
+ 
+-#ifdef OC_MEMORY_TRACE
+-  oc_mem_trace_add_pace(func, m->size, MEM_TRACE_FREE, ptr);
+-#endif
+-
+   int i = m->num;
+   char *ptr2 = NULL;
+   if (m->num > 0) {
+@@ -156,7 +161,13 @@ _oc_memb_free(
+   if (i < m->num) {
+     memset(&ptr2, 0, sizeof(void *));
+   }
+-  free(ptr);
++
++#ifdef OC_MEMORY_TRACE
++  _oc_mem_free(func, ptr);
++#else
++  _oc_mem_free(ptr);
++#endif
++
+ #endif /* OC_DYNAMIC_ALLOCATION */
+   if (m->buffers_avail_cb) {
+     m->buffers_avail_cb(oc_memb_numfree(m));
+diff --git a/util/oc_mmem.c b/util/oc_mmem.c
+index 4616ab7e..2916407e 100644
+--- a/util/oc_mmem.c
++++ b/util/oc_mmem.c
+@@ -58,7 +58,7 @@ OC_LIST(bytes_list);
+ OC_LIST(ints_list);
+ OC_LIST(doubles_list);
+ #else /* !OC_DYNAMIC_ALLOCATION */
+-#include <stdlib.h>
++#include "oc_mem.h"
+ #endif /* OC_DYNAMIC_ALLOCATION */
+ /*---------------------------------------------------------------------------*/
+ 
+@@ -80,7 +80,11 @@ _oc_mmem_alloc(
+   case BYTE_POOL:
+     bytes_allocated += size * sizeof(uint8_t);
+ #ifdef OC_DYNAMIC_ALLOCATION
+-    m->ptr = malloc(size);
++#ifdef OC_MEMORY_TRACE
++    m->ptr = _oc_mem_malloc(func, size);
++#else
++    m->ptr = _oc_mem_malloc(size);
++#endif
+     m->size = size;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+     if (avail_bytes < size) {
+@@ -96,7 +100,11 @@ _oc_mmem_alloc(
+   case INT_POOL:
+     bytes_allocated += size * sizeof(int);
+ #ifdef OC_DYNAMIC_ALLOCATION
+-    m->ptr = malloc(size * sizeof(int));
++#ifdef OC_MEMORY_TRACE
++    m->ptr = _oc_mem_malloc(func, size * sizeof(int));
++#else
++    m->ptr = _oc_mem_malloc(size * sizeof(int));
++#endif
+     m->size = size;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+     if (avail_ints < size) {
+@@ -112,7 +120,11 @@ _oc_mmem_alloc(
+   case DOUBLE_POOL:
+     bytes_allocated += size * sizeof(double);
+ #ifdef OC_DYNAMIC_ALLOCATION
+-    m->ptr = malloc(size * sizeof(double));
++#ifdef OC_MEMORY_TRACE
++    m->ptr = _oc_mem_malloc(func, size * sizeof(double));
++#else
++    m->ptr = _oc_mem_malloc(size * sizeof(double));
++#endif
+     m->size = size;
+ #else  /* OC_DYNAMIC_ALLOCATION */
+     if (avail_doubles < size) {
+@@ -129,10 +141,6 @@ _oc_mmem_alloc(
+     break;
+   }
+ 
+-#ifdef OC_MEMORY_TRACE
+-  oc_mem_trace_add_pace(func, bytes_allocated, MEM_TRACE_ALLOC, m->ptr);
+-#endif
+-
+   return bytes_allocated;
+ }
+ 
+@@ -148,21 +156,6 @@ _oc_mmem_free(
+     return;
+   }
+ 
+-#ifdef OC_MEMORY_TRACE
+-  unsigned int bytes_freed = m->size;
+-  switch (pool_type) {
+-  case INT_POOL:
+-    bytes_freed *= sizeof(int);
+-    break;
+-  case DOUBLE_POOL:
+-    bytes_freed *= sizeof(double);
+-    break;
+-  default:
+-    break;
+-  }
+-  oc_mem_trace_add_pace(func, bytes_freed, MEM_TRACE_FREE, m->ptr);
+-#endif /* OC_MEMORY_TRACE */
+-
+ #ifndef OC_DYNAMIC_ALLOCATION
+   struct oc_mmem *n;
+ 
+@@ -207,7 +200,12 @@ _oc_mmem_free(
+   }
+ #else /* !OC_DYNAMIC_ALLOCATION */
+   (void)pool_type;
+-  free(m->ptr);
++#ifdef OC_MEMORY_TRACE
++  _oc_mem_free(func, m->ptr);
++#else
++  _oc_mem_free(m->ptr);
++#endif
++
+   m->size = 0;
+ #endif /* OC_DYNAMIC_ALLOCATION */
+ }
+-- 
+2.16.1.windows.1
+

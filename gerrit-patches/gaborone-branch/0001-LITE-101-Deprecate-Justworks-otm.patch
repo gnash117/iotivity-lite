@@ -1,0 +1,301 @@
+From 2fbddf9c1f87482879d147313962ac86380fd20d Mon Sep 17 00:00:00 2001
+From: Aleksey Volkov <a.volkov@samsung.com>
+Date: Mon, 28 Oct 2019 16:26:34 +0200
+Subject: [PATCH] [LITE-101] Deprecate Justworks otm
+
+Conditional build of the JW otm type
+
+Signed-off-by: Aleksey Volkov <a.volkov@samsung.com>
+Change-Id: Ic7e7aa9c2bbdb049a41dcf124759cf11d524e065
+---
+ include/oc_obt.h          |  2 ++
+ onboarding_tool/obtmain.c |  6 ++++++
+ port/linux/Makefile       | 13 ++++++++++++-
+ security/oc_cred.c        | 17 +++++++++++------
+ security/oc_doxm.c        | 10 ++++++++++
+ security/oc_doxm.h        |  2 ++
+ security/oc_tls.c         | 27 +++++++++++++++++++++++----
+ security/oc_tls.h         |  2 ++
+ 8 files changed, 68 insertions(+), 11 deletions(-)
+
+diff --git a/include/oc_obt.h b/include/oc_obt.h
+index b8a71d07..dd92f790 100644
+--- a/include/oc_obt.h
++++ b/include/oc_obt.h
+@@ -54,9 +54,11 @@ int oc_obt_discover_owned_devices_site_local_ipv6(oc_obt_discovery_cb_t cb,
+ int oc_obt_discover_all_resources(oc_uuid_t *uuid,
+                                   oc_discovery_all_handler_t handler,
+                                   void *data);
++#ifdef OC_JW
+ /* Perform ownership transfer */
+ int oc_obt_perform_just_works_otm(oc_uuid_t *uuid, oc_obt_device_status_cb_t cb,
+                                   void *data);
++#endif /* OC_JW */
+ int oc_obt_request_random_pin(oc_uuid_t *uuid, oc_obt_device_status_cb_t cb,
+                               void *data);
+ int oc_obt_perform_random_pin_otm(oc_uuid_t *uuid, const unsigned char *pin,
+diff --git a/onboarding_tool/obtmain.c b/onboarding_tool/obtmain.c
+index 551404b4..6649c1b7 100644
+--- a/onboarding_tool/obtmain.c
++++ b/onboarding_tool/obtmain.c
+@@ -85,7 +85,9 @@ display_menu(void)
+   PRINT("[6] Discover owned devices in the site-local IPv6 scope\n");
+   PRINT("[7] Discover all resources on the device\n");
+   PRINT("-----------------------------------------------\n");
++#ifdef OC_JW
+   PRINT("[8] Just-Works Ownership Transfer Method\n");
++#endif /* OC_JW */
+   PRINT("[9] Request Random PIN from device for OTM\n");
+   PRINT("[10] Random PIN Ownership Transfer Method\n");
+ #ifdef OC_PKI
+@@ -533,6 +535,7 @@ otm_cert(void)
+ }
+ #endif /* OC_PKI */
+ 
++#ifdef OC_JW
+ static void
+ otm_just_works_cb(oc_uuid_t *uuid, int status, void *data)
+ {
+@@ -594,6 +597,7 @@ otm_just_works(void)
+ 
+   otb_mutex_unlock(app_sync_lock);
+ }
++#endif /* OC_JW */
+ 
+ static void
+ retrieve_acl2_rsrc_cb(oc_sec_acl_t *acl, void *data)
+@@ -1759,9 +1763,11 @@ main(void)
+     case 7:
+       discover_resources();
+       break;
++#ifdef OC_JW
+     case 8:
+       otm_just_works();
+       break;
++#endif /* OC_JW */
+     case 9:
+       request_random_pin();
+       break;
+diff --git a/port/linux/Makefile b/port/linux/Makefile
+index 226cc40d..7e0e83f5 100644
+--- a/port/linux/Makefile
++++ b/port/linux/Makefile
+@@ -11,6 +11,7 @@ VERSION = $(VERSION_MAJOR).$(VERSION_MINOR)
+ DYNAMIC ?= 1
+ SECURE ?= 1
+ PKI ?= 1
++JW ?= 0
+ DESTDIR ?= /usr/local
+ install_bin_dir?=${DESTDIR}/opt/iotivity-lite/bin/
+ prefix = $(DESTDIR)
+@@ -163,8 +164,14 @@ ifneq ($(SECURE),0)
+ 	SRC += $(addprefix ../../security/,oc_acl.c oc_cred.c oc_doxm.c oc_pstat.c oc_tls.c oc_svr.c oc_store.c oc_pki.c oc_certs.c oc_sp.c oc_keypair.c oc_csr.c oc_roles.c)
+ 	SRC_COMMON += $(addprefix $(MBEDTLS_DIR)/library/,${DTLS})
+ 	MBEDTLS_PATCH_FILE := $(MBEDTLS_DIR)/patched.txt
++ifeq ($(JW), 1)
++	EXTRA_CFLAGS += -DOC_JW
++endif
+ ifeq ($(DYNAMIC),1)
+-	SRC += ../../security/oc_obt.c ../../security/oc_obt_otm_justworks.c ../../security/oc_obt_otm_randompin.c ../../security/oc_obt_otm_cert.c ../../security/oc_obt_certs.c
++	SRC += ../../security/oc_obt.c ../../security/oc_obt_otm_randompin.c ../../security/oc_obt_otm_cert.c ../../security/oc_obt_certs.c
++ifeq ($(JW), 1)
++	SRC += ../../security/oc_obt_otm_justworks.c
++endif
+ 	SAMPLES += ${OBT}
+ else
+ 	SRC_COMMON += $(MBEDTLS_DIR)/library/memory_buffer_alloc.c
+@@ -400,6 +407,10 @@ iotivity-lite-client-server.pc: iotivity-lite-client-server.pc.in
+ 
+ ifneq ($(SECURE),0)
+ MBEDTLS_PATCHES ?= $(sort $(wildcard ../../patches/*.patch))
++ifeq ($(JW),0)
++ANON_PATCH ?= $(wildcard ../../patches/*anon*.patch)
++MBEDTLS_PATCHES := $(filter-out $(ANON_PATCH), $(MBEDTLS_PATCHES))
++endif
+ ${MBEDTLS_DIR}/.git:
+ 	git submodule update --init ${@D}
+ 
+diff --git a/security/oc_cred.c b/security/oc_cred.c
+index 85779744..3b824ce2 100644
+--- a/security/oc_cred.c
++++ b/security/oc_cred.c
+@@ -34,7 +34,9 @@
+ #include <stdlib.h>
+ 
+ OC_MEMB(creds, oc_sec_cred_t, OC_MAX_NUM_DEVICES *OC_MAX_NUM_SUBJECTS + 1);
++#ifdef OC_JW
+ #define OXM_JUST_WORKS "oic.sec.doxm.jw"
++#endif /* OC_JW */
+ #define OXM_RANDOM_DEVICE_PIN "oic.sec.doxm.rdp"
+ #define OXM_MANUFACTURER_CERTIFICATE "oic.sec.doxm.mfgcert"
+ 
+@@ -1219,18 +1221,21 @@ post_cred(oc_request_t *request, oc_interface_mask_t iface_mask, void *data)
+     oc_uuid_to_str(&doxm->deviceuuid, deviceuuid, 37);
+     oc_uuid_to_str(&owner->subjectuuid, owneruuid, 37);
+     oc_alloc_string(&owner->privatedata.data, 17);
+-    if (doxm->oxmsel == OC_OXMTYPE_JW) {
+-      success = oc_sec_derive_owner_psk(
+-        request->origin, (const uint8_t *)OXM_JUST_WORKS,
+-        strlen(OXM_JUST_WORKS), doxm->deviceuuid.id, 16, owner->subjectuuid.id,
+-        16, oc_cast(owner->privatedata.data, uint8_t), 16);
+-    } else if (doxm->oxmsel == OC_OXMTYPE_RDP) {
++    if (doxm->oxmsel == OC_OXMTYPE_RDP) {
+       success = oc_sec_derive_owner_psk(
+         request->origin, (const uint8_t *)OXM_RANDOM_DEVICE_PIN,
+         strlen(OXM_RANDOM_DEVICE_PIN), doxm->deviceuuid.id, 16,
+         owner->subjectuuid.id, 16, oc_cast(owner->privatedata.data, uint8_t),
+         16);
+     }
++#ifdef OC_JW
++    else if (doxm->oxmsel == OC_OXMTYPE_JW) {
++      success = oc_sec_derive_owner_psk(
++        request->origin, (const uint8_t *)OXM_JUST_WORKS,
++        strlen(OXM_JUST_WORKS), doxm->deviceuuid.id, 16, owner->subjectuuid.id,
++        16, oc_cast(owner->privatedata.data, uint8_t), 16);
++    }
++#endif /* OC_JW */
+ #ifdef OC_PKI
+     else if (doxm->oxmsel == OC_OXMTYPE_MFG_CERT) {
+       success = oc_sec_derive_owner_psk(
+diff --git a/security/oc_doxm.c b/security/oc_doxm.c
+index 9af758d5..4303d563 100644
+--- a/security/oc_doxm.c
++++ b/security/oc_doxm.c
+@@ -62,10 +62,16 @@ oc_sec_doxm_init(void)
+ static void
+ evaluate_supported_oxms(size_t device)
+ {
++#ifdef OC_JW
+   doxm[device].oxms[0] = OC_OXMTYPE_JW;
+   doxm[device].oxms[1] = -1;
+   doxm[device].oxms[2] = -1;
+   doxm[device].num_oxms = 1;
++#else
++  doxm[device].oxms[0] = -1;
++  doxm[device].oxms[1] = -1;
++  doxm[device].num_oxms = 0;
++#endif /* OC_JW */
+   if (oc_tls_is_pin_otm_supported(device)) {
+     doxm[device].oxms[doxm[device].num_oxms++] = OC_OXMTYPE_RDP;
+   }
+@@ -79,7 +85,11 @@ evaluate_supported_oxms(size_t device)
+ void
+ oc_sec_doxm_default(size_t device)
+ {
++#ifdef OC_JW
+   doxm[device].oxmsel = 0;
++#else
++  doxm[device].oxmsel = 1;
++#endif /* OC_JW */
+ #ifdef OC_PKI
+   doxm[device].sct = 9;
+ #else  /* OC_PKI */
+diff --git a/security/oc_doxm.h b/security/oc_doxm.h
+index 05150ed1..c7370179 100644
+--- a/security/oc_doxm.h
++++ b/security/oc_doxm.h
+@@ -31,7 +31,9 @@ extern "C"
+ #endif
+ 
+ typedef enum oc_sec_doxmtype_t {
++#ifdef OC_JW
+   OC_OXMTYPE_JW = 0,
++#endif /* OC_JW */
+   OC_OXMTYPE_RDP = 1,
+   OC_OXMTYPE_MFG_CERT = 2
+ } oc_sec_oxmtype_t;
+diff --git a/security/oc_tls.c b/security/oc_tls.c
+index 8b6221e2..d0561cd1 100644
+--- a/security/oc_tls.c
++++ b/security/oc_tls.c
+@@ -158,17 +158,29 @@ static const int psk_priority[2] = {
+   MBEDTLS_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256, 0
+ };
+ 
++#ifdef OC_JW
+ static const int anon_ecdh_priority[2] = {
+   MBEDTLS_TLS_ECDH_ANON_WITH_AES_128_CBC_SHA256, 0
+ };
++#endif /* OC_JW */
+ #endif /* OC_CLIENT */
+ 
+ #ifdef OC_PKI
++#ifdef OC_JW
+ static const int otm_priority[7] = {
++#else /* OC_JW */
++static const int otm_priority[6] = {
++#endif /* OC_JW */
+ #else  /* OC_PKI */
++#ifdef OC_JW
+ static const int otm_priority[3] = {
++#else /* OC_JW */
++static const int otm_priority[2] = {
++#endif /* OC_JW */
+ #endif /* !OC_PKI */
++#ifdef OC_JW
+   MBEDTLS_TLS_ECDH_ANON_WITH_AES_128_CBC_SHA256,
++#endif /* OC_JW */
+   MBEDTLS_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256,
+ #ifdef OC_PKI
+   MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8,
+@@ -1001,12 +1013,14 @@ oc_tls_select_psk_ciphersuite(void)
+   ciphers = (int *)psk_priority;
+ }
+ 
++#ifdef OC_JW
+ void
+ oc_tls_select_anon_ciphersuite(void)
+ {
+   OC_DBG("oc_tls: client requesting anon ECDH ciphersuite priority");
+   ciphers = (int *)anon_ecdh_priority;
+ }
++#endif /* OC_JW */
+ #endif /* OC_CLIENT */
+ 
+ #ifdef OC_PKI
+@@ -1447,10 +1461,12 @@ oc_sec_derive_owner_psk(oc_endpoint_t *endpoint, const uint8_t *oxm,
+   int iv_size = 0;
+   int key_size = 0;
+   int key_block_len = 0;
+-  if (MBEDTLS_TLS_ECDH_ANON_WITH_AES_128_CBC_SHA256 ==
++  if (MBEDTLS_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256 ==
+         peer->ssl_ctx.session->ciphersuite ||
+-      MBEDTLS_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256 ==
++#ifdef OC_JW
++      MBEDTLS_TLS_ECDH_ANON_WITH_AES_128_CBC_SHA256 ==
+         peer->ssl_ctx.session->ciphersuite ||
++#endif /* OC_JW */
+       MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256 ==
+         peer->ssl_ctx.session->ciphersuite) {
+     // 2 * ( 32 + 0 + 16 ) = 96
+@@ -1599,8 +1615,11 @@ oc_tls_uses_psk_cred(oc_tls_peer_t *peer)
+     return false;
+   }
+   int cipher = peer->ssl_ctx.session->ciphersuite;
+-  if (MBEDTLS_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256 == cipher ||
+-      MBEDTLS_TLS_ECDH_ANON_WITH_AES_128_CBC_SHA256 == cipher) {
++  if (MBEDTLS_TLS_ECDHE_PSK_WITH_AES_128_CBC_SHA256 == cipher
++#ifdef OC_JW
++     || MBEDTLS_TLS_ECDH_ANON_WITH_AES_128_CBC_SHA256 == cipher
++#endif /* OC_JW */
++     ) {
+     return true;
+   }
+   return false;
+diff --git a/security/oc_tls.h b/security/oc_tls.h
+index d47b881b..0345d3ba 100644
+--- a/security/oc_tls.h
++++ b/security/oc_tls.h
+@@ -82,7 +82,9 @@ void oc_tls_select_cert_ciphersuite(void);
+ void oc_tls_select_mfg_cert_chain(int credid);
+ void oc_tls_select_identity_cert_chain(int credid);
+ void oc_tls_select_psk_ciphersuite(void);
++#ifdef OC_JW
+ void oc_tls_select_anon_ciphersuite(void);
++#endif /* OC_JW */
+ void oc_tls_select_cloud_ciphersuite(void);
+ 
+ /* Internal interface for checking supported OTMs */
+-- 
+2.16.1.windows.1
+

@@ -1,0 +1,32 @@
+From a1d189016c49d136b663a46f782d6525a5e88d2a Mon Sep 17 00:00:00 2001
+From: iot <rami.jung@samsung.com>
+Date: Sat, 26 May 2018 19:16:47 +0900
+Subject: [PATCH] Free blockwisebuffers when they are not needed
+
+duplicating oc_blockwise_scrub_buffers() works well
+
+Change-Id: I733573877bc80c690c7aaa2e21df6ca1ba8ddf89
+Signed-off-by: iot <rami.jung@samsung.com>
+---
+ messaging/coap/engine.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/messaging/coap/engine.c b/messaging/coap/engine.c
+index e42eafdb..9b6347ac 100644
+--- a/messaging/coap/engine.c
++++ b/messaging/coap/engine.c
+@@ -670,6 +670,11 @@ send_message:
+       }
+       transaction->message->length =
+         coap_serialize_message(response, transaction->message->data);
++
++#ifdef OC_BLOCK_WISE
++      oc_blockwise_scrub_buffers();
++#endif /* OC_BLOCK_WISE */
++
+       if (transaction->message->length) {
+         coap_send_transaction(transaction);
+       } else {
+-- 
+2.16.1.windows.1
+

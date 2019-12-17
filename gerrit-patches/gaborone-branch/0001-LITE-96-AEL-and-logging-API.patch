@@ -1,0 +1,893 @@
+From 9de46103e8298bee717b3ab90cf75ee05fa01370 Mon Sep 17 00:00:00 2001
+From: Iurii Metelytsia <i.metelytsia@samsung.com>
+Date: Tue, 5 Nov 2019 19:25:52 +0200
+Subject: [PATCH] [LITE-96] AEL and logging API
+
+Signed-off-by: Iurii Metelytsia <i.metelytsia@samsung.com>
+Change-Id: I1742c81cc8f56a0ebfadc0e4e538403e3821123a
+---
+ api/oc_core_res.c   |   2 +
+ api/oc_discovery.c  |   8 +
+ api/oc_main.c       |   3 +
+ include/oc_ri.h     |   1 +
+ port/linux/Makefile |   2 +-
+ security/oc_ael.c   | 515 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ security/oc_ael.h   | 110 +++++++++++
+ security/oc_obt.c   |   1 +
+ security/oc_store.c |  67 +++++++
+ security/oc_store.h |   2 +
+ security/oc_svr.c   |   5 +
+ 11 files changed, 715 insertions(+), 1 deletion(-)
+ create mode 100644 security/oc_ael.c
+ create mode 100644 security/oc_ael.h
+
+diff --git a/api/oc_core_res.c b/api/oc_core_res.c
+index 39b908ec..21a5eee7 100644
+--- a/api/oc_core_res.c
++++ b/api/oc_core_res.c
+@@ -594,6 +594,8 @@ oc_core_get_resource_by_uri(const char *uri, size_t device)
+       type = OCF_SEC_PSTAT;
+     } else if (memcmp(uri + skip, "oic/sec/acl2", 12) == 0) {
+       type = OCF_SEC_ACL;
++    } else if (memcmp(uri + skip, "oic/sec/ael", 11) == 0) {
++      type = OCF_SEC_AEL;
+     } else if (memcmp(uri + skip, "oic/sec/cred", 12) == 0) {
+       type = OCF_SEC_CRED;
+     }
+diff --git a/api/oc_discovery.c b/api/oc_discovery.c
+index 3092d25f..e3cc3dd2 100644
+--- a/api/oc_discovery.c
++++ b/api/oc_discovery.c
+@@ -161,6 +161,10 @@ process_device_resources(CborEncoder *links, oc_request_t *request,
+                       request, oc_string(anchor), links))
+     matches++;
+ 
++  if (filter_resource(oc_core_get_resource_by_index(OCF_SEC_AEL, device_index),
++                      request, oc_string(anchor), links))
++    matches++;
++
+   if (filter_resource(oc_core_get_resource_by_index(OCF_SEC_CRED, device_index),
+                       request, oc_string(anchor), links))
+     matches++;
+@@ -388,6 +392,10 @@ process_oic_1_1_device_object(CborEncoder *device, oc_request_t *request,
+         oc_core_get_resource_by_index(OCF_SEC_ACL, device_num), request,
+         oc_rep_array(links)))
+     matches++;
++  if (filter_oic_1_1_resource(
++        oc_core_get_resource_by_index(OCF_SEC_AEL, device_num), request,
++        oc_rep_array(links)))
++    matches++;
+ 
+ #ifdef OC_PKI
+   if (filter_oic_1_1_resource(
+diff --git a/api/oc_main.c b/api/oc_main.c
+index 5d65b095..23b2d869 100644
+--- a/api/oc_main.c
++++ b/api/oc_main.c
+@@ -42,6 +42,7 @@
+ #include "security/oc_store.h"
+ #include "security/oc_svr.h"
+ #include "security/oc_tls.h"
++#include "security/oc_ael.h"
+ #ifdef OC_PKI
+ #include "security/oc_keypair.h"
+ #include "security/oc_sp.h"
+@@ -237,6 +238,7 @@ oc_main_init(const oc_handler_t *handler)
+     oc_sec_load_doxm(device);
+     oc_sec_load_cred(device);
+     oc_sec_load_acl(device);
++    oc_sec_load_ael(device);
+ #ifdef OC_PKI
+     oc_sec_load_sp(device);
+     oc_sec_load_ecdsa_keypair(device);
+@@ -293,6 +295,7 @@ oc_main_shutdown(void)
+   oc_sec_cred_free();
+   oc_sec_doxm_free();
+   oc_sec_pstat_free();
++  oc_sec_ael_free();
+ #ifdef OC_PKI
+   oc_sec_sp_free();
+   oc_free_ecdsa_keypairs();
+diff --git a/include/oc_ri.h b/include/oc_ri.h
+index 2e6e4cfd..fadf528a 100644
+--- a/include/oc_ri.h
++++ b/include/oc_ri.h
+@@ -107,6 +107,7 @@ typedef enum {
+   OCF_SEC_DOXM,
+   OCF_SEC_PSTAT,
+   OCF_SEC_ACL,
++  OCF_SEC_AEL,
+   OCF_SEC_CRED,
+ #ifdef OC_PKI
+   OCF_SEC_SP,
+diff --git a/port/linux/Makefile b/port/linux/Makefile
+index 226cc40d..74d3d2d5 100644
+--- a/port/linux/Makefile
++++ b/port/linux/Makefile
+@@ -160,7 +160,7 @@ ifeq ($(SWUPDATE),1)
+ endif
+ 
+ ifneq ($(SECURE),0)
+-	SRC += $(addprefix ../../security/,oc_acl.c oc_cred.c oc_doxm.c oc_pstat.c oc_tls.c oc_svr.c oc_store.c oc_pki.c oc_certs.c oc_sp.c oc_keypair.c oc_csr.c oc_roles.c)
++	SRC += $(addprefix ../../security/,oc_acl.c oc_cred.c oc_doxm.c oc_pstat.c oc_tls.c oc_svr.c oc_store.c oc_pki.c oc_certs.c oc_sp.c oc_keypair.c oc_csr.c oc_roles.c oc_ael.c)
+ 	SRC_COMMON += $(addprefix $(MBEDTLS_DIR)/library/,${DTLS})
+ 	MBEDTLS_PATCH_FILE := $(MBEDTLS_DIR)/patched.txt
+ ifeq ($(DYNAMIC),1)
+diff --git a/security/oc_ael.c b/security/oc_ael.c
+new file mode 100644
+index 00000000..b12365b6
+--- /dev/null
++++ b/security/oc_ael.c
+@@ -0,0 +1,515 @@
++/*
++// Copyright 2019 Samsung Electronics All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//      http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++*/
++
++#ifdef OC_SECURITY
++
++#include <stddef.h>
++#include <string.h>
++#ifndef _WIN32
++#include <strings.h>
++#endif
++
++#include "oc_api.h"
++#include "oc_ael.h"
++#include "oc_store.h"
++#include "oc_clock_util.h"
++#ifdef OC_DYNAMIC_ALLOCATION
++#include <stdlib.h>
++#include "port/oc_assert.h"
++#endif /* OC_DYNAMIC_ALLOCATION */
++
++#ifndef OC_DYNAMIC_ALLOCATION
++static oc_sec_ael_t s_ael;
++#endif /* OC_DYNAMIC_ALLOCATION */
++
++static oc_sec_ael_t *ael = NULL;
++
++static void oc_sec_ael_reset(void);
++
++static bool oc_sec_ael_add_event(uint8_t category, uint8_t priority, oc_clock_time_t timestamp,
++                                 const char *aeid, const char *message, const char **aux, size_t aux_len,
++                                 bool write_to_storage);
++
++#ifdef OC_DYNAMIC_ALLOCATION
++static size_t oc_sec_ael_calc_event_size(const char *aeid, const char *message, const char **aux_info, size_t aux_size,
++                                         size_t *aeid_sz, size_t *message_sz, size_t *aux_info_sz, size_t **aux_sz);
++
++static oc_sec_ael_event_t *oc_sec_ael_create_event(uint8_t category, uint8_t priority, oc_clock_time_t timestamp,
++                                                   const char *aeid, const char *message, const char** aux_info, size_t aux_size,
++                                                   size_t event_sz, size_t aeid_sz, size_t message_sz, size_t aux_info_sz, size_t *aux_sz);
++static inline void oc_sec_ael_free_event(oc_sec_ael_event_t *event)
++{
++  free(event);
++}
++#endif /* OC_DYNAMIC_ALLOCATION */
++
++static inline size_t oc_sec_ael_max_space(void)
++{
++  size_t res = OC_SEC_AEL_MAX_SIZE;
++  switch (ael->unit)
++  {
++  case OC_SEC_AEL_UNIT_BYTE:
++    res = ael->maxsize;
++    break;
++  case OC_SEC_AEL_UNIT_KBYTE:
++    res = ael->maxsize / 1024;
++    break;
++  }
++  return res;
++}
++static inline size_t oc_sec_ael_used_space(void)
++{
++  size_t res = 0;
++  switch (ael->unit)
++  {
++  case OC_SEC_AEL_UNIT_BYTE:
++    res = ael->events.size;
++    break;
++  case OC_SEC_AEL_UNIT_KBYTE:
++    res = ael->events.size / 1024;
++    break;
++  }
++  return res;
++}
++
++static const char* oc_sec_ael_unit_string(void)
++{
++  static const char* ael_unit_string[] = {"Byte", "Kbyte"};
++  switch (ael->unit)
++  {
++  case OC_SEC_AEL_UNIT_BYTE:
++  case OC_SEC_AEL_UNIT_KBYTE:
++    return ael_unit_string[ael->unit];
++  }
++  return "";
++}
++
++void
++oc_sec_ael_init(void)
++{
++  oc_sec_ael_reset();
++}
++void
++oc_sec_ael_free(void)
++{
++#ifdef OC_DYNAMIC_ALLOCATION
++  if (ael) {
++      for (oc_sec_ael_event_t* e = ael->events.tail; e; e = e->next) {
++        oc_sec_ael_free_event(e);
++      }
++    free(ael);
++    ael = NULL;
++  }
++#endif /* OC_DYNAMIC_ALLOCATION */
++}
++
++void
++oc_sec_ael_default(size_t device)
++{
++  oc_sec_ael_reset();
++  oc_sec_dump_ael(device);
++}
++
++bool
++oc_sec_ael_add(uint8_t category, uint8_t priority, const char *aeid,
++               const char *message, const char **aux, size_t aux_len)
++{
++  return oc_sec_ael_add_event(category, priority, oc_clock_time(),
++                                aeid, message, aux, aux_len, true);
++}
++
++void
++get_ael(oc_request_t *request, oc_interface_mask_t iface_mask, void *data)
++{
++  (void)data;
++  if (request) {
++    switch (iface_mask) {
++    case OC_IF_BASELINE:
++      if (oc_sec_ael_encode(request->resource->device, false)) {
++        oc_send_response(request, OC_STATUS_OK);
++      } else {
++        oc_send_response(request, OC_STATUS_BAD_REQUEST);
++      }
++      break;
++    default:
++      break;
++    }
++  }
++}
++void
++post_ael(oc_request_t *request, oc_interface_mask_t iface_mask,
++               void *data)
++{
++  (void)iface_mask;
++  (void)data;
++  if (request) {
++    if (oc_sec_ael_decode(request->request_payload, false)) {
++      oc_send_response(request, OC_STATUS_CHANGED);
++      oc_sec_dump_ael(request->resource->device);
++    } else {
++      oc_send_response(request, OC_STATUS_BAD_REQUEST);
++    }
++  }
++}
++
++bool
++oc_sec_ael_encode(size_t device, bool to_storage)
++{
++  char tmpstr[64];
++  oc_rep_start_root_object();
++  oc_process_baseline_interface(oc_core_get_resource_by_index(OCF_SEC_AEL, device));
++  /* categoryfilter */
++  oc_rep_set_int(root, categoryfilter, ael->categoryfilter);
++  /* priorityfilter */
++  oc_rep_set_int(root, priorityfilter, ael->priorityfilter);
++  /* maxspace */
++  if (!to_storage) {
++    oc_rep_set_int(root, maxspace, oc_sec_ael_max_space());
++  } else {
++    oc_rep_set_int(root, maxspace, ael->maxsize);
++  }
++  /* usedspace */
++  if (!to_storage) {
++    oc_rep_set_int(root, usedspace, oc_sec_ael_used_space());
++  }
++  /* unit */
++  if (!to_storage) {
++    oc_rep_set_text_string(root, unit, oc_sec_ael_unit_string());
++  } else {
++    oc_rep_set_int(root, unit, ael->unit);
++  }
++  /* events */
++  oc_rep_set_array(root, events);
++  for (oc_sec_ael_event_t *e = ael->events.tail; e; e = e->next) {
++    oc_rep_object_array_start_item(events);
++    /* devicetype & di */
++    if (!to_storage) {
++      oc_device_info_t *devinfo = oc_core_get_device_info(device);
++      if (devinfo) {
++        oc_rep_set_text_string(events, devicetype, oc_string(devinfo->name));
++        oc_uuid_to_str(&devinfo->di, tmpstr, OC_UUID_LEN);
++        oc_rep_set_text_string(events, di, tmpstr);
++      }
++    }
++    /* category */
++    oc_rep_set_int(events, category, e->category);
++    /* priority */
++    oc_rep_set_int(events, priority, e->priority);
++    /* timestamp */
++    if (!to_storage) {
++      if (oc_clock_encode_time_rfc3339(e->timestamp, tmpstr, 64) != 0) {
++        oc_rep_set_text_string(events, timestamp, tmpstr);
++      }
++    } else {
++      oc_rep_set_int(events, timestamp, e->timestamp);
++    }
++    /* aeid */
++    if (e->aeid) {
++      oc_rep_set_text_string(events, aeid, e->aeid);
++    }
++    /* message */
++    if (e->message) {
++      oc_rep_set_text_string(events, message, e->message);
++    }
++    /* auxiliaryinfo */
++    if (e->aux_info && e->aux_size != 0) {
++      oc_string_array_t auxiliaryinfo;
++      oc_new_string_array(&auxiliaryinfo, e->aux_size);
++      for (size_t i = 0; i < e->aux_size; i++) {
++        oc_string_array_add_item(auxiliaryinfo, e->aux_info[i]);
++      }
++      oc_rep_set_string_array(events, auxiliaryinfo, auxiliaryinfo);
++      oc_free_string_array(&auxiliaryinfo);
++    }
++    oc_rep_object_array_end_item(events);
++  }
++  oc_rep_close_array(root, events);
++  oc_rep_end_root_object();
++  return true;
++}
++bool
++oc_sec_ael_decode(oc_rep_t *rep, bool from_storage)
++{
++  for (; rep; rep = rep->next) {
++    size_t len = oc_string_len(rep->name);
++    switch (rep->type) {
++    /* categoryfilter, priorityfilter, maxspace, unit */
++    case OC_REP_INT:
++      if (len == 14 && memcmp(oc_string(rep->name), "categoryfilter", 14) == 0) {
++        ael->categoryfilter = (uint8_t)rep->value.integer;
++      } else if (len == 14 && memcmp(oc_string(rep->name), "priorityfilter", 14) == 0) {
++        ael->priorityfilter = (uint8_t)rep->value.integer;
++      } else if (from_storage && len == 8 && memcmp(oc_string(rep->name), "maxspace", 8) == 0) {
++        ael->maxsize = (size_t)rep->value.integer;
++      } else if (from_storage && len == 4 && memcmp(oc_string(rep->name), "unit", 4) == 0) {
++        ael->unit = (oc_sec_ael_unit_t)rep->value.integer;
++      }
++      break;
++    /* events */
++    case OC_REP_OBJECT_ARRAY:
++      if (from_storage && len == 6 && memcmp(oc_string(rep->name), "events", 6) == 0) {
++        for (oc_rep_t *event = rep->value.object_array; event; event = event->next) {
++          uint8_t category = 0;
++          uint8_t priority = 0;
++          oc_clock_time_t timestamp = 0;
++          char *aeid = NULL;
++          char *message = NULL;
++          size_t aux_sz = 0;
++          char **aux = NULL;
++          for (oc_rep_t *r = event->value.object; r; r = r->next) {
++            size_t l = oc_string_len(r->name);
++            switch (r->type) {
++            /* category, priority, timestamp */
++            case OC_REP_INT:
++              if (l == 8 && memcmp(oc_string(r->name), "category", 8) == 0) {
++                category = (uint8_t)r->value.integer;
++              } else if (l == 8 && memcmp(oc_string(r->name), "priority", 8) == 0) {
++                priority = (uint8_t)r->value.integer;
++              } else if (l == 9 && memcmp(oc_string(r->name), "timestamp", 9) == 0) {
++                timestamp = (oc_clock_time_t)r->value.integer;
++              }
++              break;
++            /* aeid, message */
++            case OC_REP_STRING:
++              if (l == 4 && memcmp(oc_string(r->name), "aeid", 4) == 0) {
++                aeid = oc_string(r->value.string);
++              } else if (l == 7 && memcmp(oc_string(r->name), "message", 7) == 0) {
++                message = oc_string(r->value.string);
++              }
++              break;
++            /* auxiliaryinfo */
++            case OC_REP_STRING_ARRAY:
++#ifdef OC_DYNAMIC_ALLOCATION
++              if (l == 13 && memcmp(oc_string(r->name), "auxiliaryinfo", 13) == 0) {
++                aux_sz = oc_string_array_get_allocated_size(r->value.array);
++                if ((aux_sz != 0) && ((aux = (char**)malloc(aux_sz * sizeof(char*))) != NULL)) {
++                  for (size_t i = 0; i < aux_sz; i++) {
++                    aux[i] = oc_string_array_get_item(r->value.array, i);
++                  }
++                }
++              }
++#else /* OC_DYNAMIC_ALLOCATION */
++              #pragma message ("Not implemented!")
++              OC_ERR("Not implemented!");
++#endif /* OC_DYNAMIC_ALLOCATION */
++              break;
++            default:
++              break;
++            }
++          }
++          oc_sec_ael_add_event(category, priority, timestamp, aeid, message,
++                               (const char **)aux, aux_sz, false);
++#ifdef OC_DYNAMIC_ALLOCATION
++          if (aux) {
++            free(aux);
++          }
++#endif /* OC_DYNAMIC_ALLOCATION */
++        }
++      }
++      break;
++    default:
++      break;
++    }
++  }
++  return true;
++}
++
++static void
++oc_sec_ael_reset(void)
++{
++  oc_sec_ael_free();
++#ifdef OC_DYNAMIC_ALLOCATION
++  if (!(ael = (oc_sec_ael_t *)calloc(1, sizeof(oc_sec_ael_t)))) {
++    oc_abort("oc_ael: Out of memory");
++  }
++#else /* OC_DYNAMIC_ALLOCATION */
++  ael = &s_ael;
++#endif /* OC_DYNAMIC_ALLOCATION */
++  ael->categoryfilter = OC_SEC_AEL_CATEGORYFILTER_DEFAULT;
++  ael->priorityfilter = OC_SEC_AEL_PRIORITYFILTER_DEFAULT;
++  ael->maxsize = OC_SEC_AEL_MAX_SIZE;
++  ael->unit = OC_SEC_AEL_UNIT_DEFAULT;
++  ael->events.size = 0;
++  ael->events.head = ael->events.tail = NULL;
++}
++
++static bool
++oc_sec_ael_add_event(uint8_t category, uint8_t priority, oc_clock_time_t timestamp,
++                     const char *aeid, const char *message, const char **aux, size_t aux_len,
++                     bool write_to_storage)
++{
++  bool res = false;
++
++  if (!(ael->categoryfilter & category) || (ael->priorityfilter < priority)) {
++    OC_DBG("Event category or priority not matching");
++    return false;
++  }
++
++#ifdef OC_DYNAMIC_ALLOCATION
++  // calculate total event size
++  size_t aeid_sz = 0;
++  size_t message_sz = 0;
++  size_t aux_info_sz = 0;
++  size_t *aux_sz = NULL;
++  size_t event_sz = oc_sec_ael_calc_event_size(aeid, message, aux, aux_len,
++                                               &aeid_sz, &message_sz, &aux_info_sz, &aux_sz);
++  // check size
++  if (event_sz > ael->maxsize) {
++    OC_ERR("event size exceeds available size!");
++  } else {
++    // delete old events if needed
++    while (((event_sz + ael->events.size) > ael->maxsize) && ael->events.tail) {
++      oc_sec_ael_event_t *t = ael->events.tail;
++      ael->events.size -= t->size;
++      ael->events.tail = t->next;
++      oc_sec_ael_free_event(t);
++    }
++    // if all events deleted
++    if (!ael->events.tail) {
++      ael->events.head = NULL;
++    }
++    // create/add event
++    oc_sec_ael_event_t *e = oc_sec_ael_create_event(category, priority, timestamp, aeid, message, aux, aux_len,
++                                                    event_sz, aeid_sz, message_sz, aux_info_sz, aux_sz);
++    if (!e) {
++      OC_ERR("Can't create event!");
++    } else {
++      ael->events.size += e->size;
++      if (!ael->events.head) {
++        ael->events.head = ael->events.tail = e;
++      } else {
++        ael->events.head->next = e;
++        ael->events.head = e;
++      }
++      // write to storage
++      if (write_to_storage) {
++        oc_sec_dump_ael(0);
++      }
++      res = true;
++    }
++  }
++  if (aux_sz) {
++    free(aux_sz);
++  }
++#else /* OC_DYNAMIC_ALLOCATION */
++  #pragma message ("Not implemented!")
++  (void)category;
++  (void)priority;
++  (void)timestamp;
++  (void)aeid;
++  (void)message;
++  (void)aux;
++  (void)aux_len;
++  (void)write_to_storage;
++  OC_ERR("Not implemented!");
++#endif /* OC_DYNAMIC_ALLOCATION */
++
++  return res;
++}
++
++#ifdef OC_DYNAMIC_ALLOCATION
++static size_t
++oc_sec_ael_calc_event_size(const char *aeid, const char *message, const char **aux_info, size_t aux_size,
++                           size_t *aeid_sz, size_t *message_sz, size_t *aux_info_sz, size_t **aux_sz)
++{
++  size_t res = sizeof(oc_sec_ael_event_t);
++
++  if (aeid) {
++    *aeid_sz = (strlen(aeid) + 1);
++    res += *aeid_sz;
++  } else {
++    *aeid_sz = 0;
++  }
++  if (message) {
++    *message_sz = (strlen(message) + 1);
++    res += *message_sz;
++  } else {
++    *message_sz = 0;
++  }
++  size_t *tmp_arr = NULL;
++  if (aux_info && aux_size != 0 &&
++          ((tmp_arr = malloc(aux_size * sizeof(char*))) != NULL)) {
++    *aux_info_sz = (aux_size * sizeof(char*));
++    res += *aux_info_sz;
++    for (size_t i = 0; i < aux_size; i++) {
++      tmp_arr[i] = (strlen(aux_info[i]) + 1);
++      res += tmp_arr[i];
++    }
++    *aux_sz = tmp_arr;
++  } else {
++    *aux_info_sz = 0;
++    *aux_sz = NULL;
++  }
++
++  return res;
++}
++
++static oc_sec_ael_event_t *
++oc_sec_ael_create_event(uint8_t category, uint8_t priority, oc_clock_time_t timestamp,
++                        const char *aeid, const char *message, const char** aux_info, size_t aux_size,
++                        size_t event_sz, size_t aeid_sz, size_t message_sz, size_t aux_info_sz, size_t *aux_sz)
++{
++  // allocate memory
++  oc_sec_ael_event_t *res = (oc_sec_ael_event_t *)malloc(event_sz);
++  if (!res) {
++    OC_ERR("Out of memory!");
++    return NULL;
++  }
++
++  // copying values
++  uint8_t* p = ((uint8_t*)res + sizeof(oc_sec_ael_event_t));
++
++  res->size = event_sz;
++  res->category = category;
++  res->priority = priority;
++  res->timestamp = timestamp;
++  if (aeid_sz != 0) {
++    res->aeid = (char*)p;
++    strncpy(res->aeid, aeid, aeid_sz - 1);
++    res->aeid[aeid_sz-1] = '\0';
++    p+=aeid_sz;
++  } else {
++    res->aeid= NULL;
++  }
++  if (message_sz != 0) {
++    res->message = (char*)p;
++    strncpy(res->message, message, message_sz - 1);
++    res->message[message_sz-1] = '\0';
++    p+=message_sz;
++  } else {
++    res->message = NULL;
++  }
++  if (aux_info_sz != 0 && aux_sz) {
++    res->aux_info = (char**)p;
++    p+=aux_info_sz;
++    for (size_t i = 0; i < aux_size; i++) {
++      res->aux_info[i] = (char*)p;
++      strncpy(res->aux_info[i], aux_info[i], aux_sz[i] - 1);
++      res->aux_info[i][aux_sz[i]-1] = '\0';
++      p+=aux_sz[i];
++    }
++    res->aux_size = aux_size;
++  } else {
++    res->aux_info = NULL;
++    res->aux_size = 0;
++  }
++  res->next = NULL;
++
++  return res;
++}
++#endif /* OC_DYNAMIC_ALLOCATION */
++
++#endif /* OC_SECURITY */
+diff --git a/security/oc_ael.h b/security/oc_ael.h
+new file mode 100644
+index 00000000..788b9a7f
+--- /dev/null
++++ b/security/oc_ael.h
+@@ -0,0 +1,110 @@
++/*
++// Copyright 2019 Samsung Electronics All Rights Reserved.
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++//
++//      http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++*/
++
++#ifndef OC_AEL_H
++#define OC_AEL_H
++
++#include <stdbool.h>
++
++#include "oc_config.h"
++#include "oc_core_res.h"
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++typedef struct oc_sec_ael_event_def oc_sec_ael_event_t;
++
++struct oc_sec_ael_event_def
++{
++  size_t size;
++  uint8_t category;
++  uint8_t priority;
++  oc_clock_time_t timestamp;
++  char *aeid;
++  char *message;
++  char **aux_info;
++  size_t aux_size;
++  oc_sec_ael_event_t* next;
++};
++
++typedef struct
++{
++  size_t size;
++  oc_sec_ael_event_t* head;
++  oc_sec_ael_event_t* tail;
++} oc_sec_ael_events_t;
++
++typedef enum {
++  OC_SEC_AEL_CATEGORYFILTER_ACCESS_CONTROL = 0x01,
++  OC_SEC_AEL_CATEGORYFILTER_ONBOARDING = 0x02,
++  OC_SEC_AEL_CATEGORYFILTER_DEVICE = 0x04,
++  OC_SEC_AEL_CATEGORYFILTER_AUTHENTICATION = 0x08,
++  OC_SEC_AEL_CATEGORYFILTER_SVR_MODIFICATION = 0x10,
++  OC_SEC_AEL_CATEGORYFILTER_CLOUD = 0x20,
++  OC_SEC_AEL_CATEGORYFILTER_COMMUNICATION = 0x40,
++  OC_SEC_AEL_CATEGORYFILTER_ALL = 0xFF,
++  OC_SEC_AEL_CATEGORYFILTER_DEFAULT = OC_SEC_AEL_CATEGORYFILTER_ALL,
++} oc_sec_ael_categoryfilter_t;
++
++typedef enum {
++  OC_SEC_AEL_PRIORITYFILTER_CRIT = 0,
++  OC_SEC_AEL_PRIORITYFILTER_ERR,
++  OC_SEC_AEL_PRIORITYFILTER_WARN,
++  OC_SEC_AEL_PRIORITYFILTER_INFO,
++  OC_SEC_AEL_PRIORITYFILTER_DEBUG,
++  OC_SEC_AEL_PRIORITYFILTER_DEFAULT = OC_SEC_AEL_PRIORITYFILTER_DEBUG,
++} oc_sec_ael_priorityfilter_t;
++
++#define OC_SEC_AEL_MAX_SIZE (1024 * 5)  // 5K
++                                        // (due to buffer limitations used in file I/O operations (8K)
++                                        // and CBOR format redundancy)
++
++typedef enum {
++  OC_SEC_AEL_UNIT_BYTE = 0,
++  OC_SEC_AEL_UNIT_KBYTE,
++  OC_SEC_AEL_UNIT_DEFAULT = OC_SEC_AEL_UNIT_BYTE,
++} oc_sec_ael_unit_t;
++
++typedef struct
++{
++  uint8_t categoryfilter;
++  uint8_t priorityfilter;
++  size_t maxsize;
++  oc_sec_ael_unit_t unit;
++  oc_sec_ael_events_t events;
++} oc_sec_ael_t;
++
++void oc_sec_ael_init(void);
++void oc_sec_ael_free(void);
++
++void oc_sec_ael_default(size_t device);
++
++bool oc_sec_ael_add(uint8_t category, uint8_t priority, const char *aeid,
++                    const char *message, const char **aux, size_t aux_len);
++
++void get_ael(oc_request_t *request, oc_interface_mask_t iface_mask, void *data);
++void post_ael(oc_request_t *request, oc_interface_mask_t iface_mask,
++               void *data);
++
++bool oc_sec_ael_encode(size_t device, bool to_storage);
++bool oc_sec_ael_decode(oc_rep_t *rep, bool from_storage);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* OC_AEL_H */
+diff --git a/security/oc_obt.c b/security/oc_obt.c
+index d9d3f14e..a8336758 100644
+--- a/security/oc_obt.c
++++ b/security/oc_obt.c
+@@ -2639,6 +2639,7 @@ oc_obt_init(void)
+     oc_sec_dump_doxm(0);
+     oc_sec_dump_cred(0);
+     oc_sec_dump_acl(0);
++    oc_sec_dump_ael(0);
+ 
+ #ifdef OC_PKI
+     uint8_t public_key[OC_KEYPAIR_PUBKEY_SIZE];
+diff --git a/security/oc_store.c b/security/oc_store.c
+index e4f7c132..3e249df5 100644
+--- a/security/oc_store.c
++++ b/security/oc_store.c
+@@ -26,6 +26,7 @@
+ #include "oc_tls.h"
+ #include "port/oc_storage.h"
+ #include <oc_config.h>
++#include "oc_ael.h"
+ 
+ #ifdef OC_DYNAMIC_ALLOCATION
+ #include <stdlib.h>
+@@ -565,4 +566,70 @@ oc_sec_dump_unique_ids(size_t device)
+ #endif /* OC_DYNAMIC_ALLOCATION */
+ }
+ 
++void
++oc_sec_dump_ael(size_t device)
++{
++#ifdef OC_DYNAMIC_ALLOCATION
++  uint8_t *buf = malloc(OC_MAX_APP_DATA_SIZE);
++  if (!buf)
++    return;
++#else  /* OC_DYNAMIC_ALLOCATION */
++  uint8_t buf[OC_MAX_APP_DATA_SIZE];
++#endif /* !OC_DYNAMIC_ALLOCATION */
++
++  /* ael */
++  oc_rep_new(buf, OC_MAX_APP_DATA_SIZE);
++  oc_sec_ael_encode(device, true);
++  int size = oc_rep_get_encoded_payload_size();
++  if (size > 0) {
++    OC_DBG("oc_store: encoded ael size %d", size);
++    char svr_tag[SVR_TAG_MAX];
++    gen_svr_tag("ael", device, svr_tag);
++    oc_storage_write(svr_tag, buf, size);
++  }
++
++#ifdef OC_DYNAMIC_ALLOCATION
++  free(buf);
++#endif /* OC_DYNAMIC_ALLOCATION */
++}
++void
++oc_sec_load_ael(size_t device)
++{
++  long ret = 0;
++  oc_rep_t *rep;
++
++#ifdef OC_DYNAMIC_ALLOCATION
++  uint8_t *buf = malloc(OC_MAX_APP_DATA_SIZE);
++  if (!buf) {
++    oc_sec_ael_default(device);
++    return;
++  }
++#else  /* OC_DYNAMIC_ALLOCATION */
++  uint8_t buf[OC_MAX_APP_DATA_SIZE];
++#endif /* !OC_DYNAMIC_ALLOCATION */
++  char svr_tag[SVR_TAG_MAX];
++  gen_svr_tag("ael", device, svr_tag);
++  ret = oc_storage_read(svr_tag, buf, OC_MAX_APP_DATA_SIZE);
++  if (ret > 0) {
++#ifndef OC_DYNAMIC_ALLOCATION
++    char rep_objects_alloc[OC_MAX_NUM_REP_OBJECTS];
++    oc_rep_t rep_objects_pool[OC_MAX_NUM_REP_OBJECTS];
++    memset(rep_objects_alloc, 0, OC_MAX_NUM_REP_OBJECTS * sizeof(char));
++    memset(rep_objects_pool, 0, OC_MAX_NUM_REP_OBJECTS * sizeof(oc_rep_t));
++    struct oc_memb rep_objects = { sizeof(oc_rep_t), OC_MAX_NUM_REP_OBJECTS,
++                                   rep_objects_alloc, (void *)rep_objects_pool,
++                                   0 };
++#else  /* !OC_DYNAMIC_ALLOCATION */
++    struct oc_memb rep_objects = { sizeof(oc_rep_t), 0, 0, 0, 0 };
++#endif /* OC_DYNAMIC_ALLOCATION */
++    oc_rep_set_pool(&rep_objects);
++    oc_parse_rep(buf, (uint16_t)ret, &rep);
++    oc_sec_ael_decode(rep, true);
++    oc_free_rep(rep);
++  }
++#ifdef OC_DYNAMIC_ALLOCATION
++  free(buf);
++#endif /* OC_DYNAMIC_ALLOCATION */
++}
++
+ #endif /* OC_SECURITY */
+diff --git a/security/oc_store.h b/security/oc_store.h
+index 4f5eee53..5d5be28d 100644
+--- a/security/oc_store.h
++++ b/security/oc_store.h
+@@ -37,6 +37,8 @@ void oc_sec_load_sp(size_t device);
+ void oc_sec_dump_sp(size_t device);
+ void oc_sec_load_ecdsa_keypair(size_t device);
+ void oc_sec_dump_ecdsa_keypair(size_t device);
++void oc_sec_dump_ael(size_t device);
++void oc_sec_load_ael(size_t device);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/security/oc_svr.c b/security/oc_svr.c
+index 73a487f4..6e171e93 100644
+--- a/security/oc_svr.c
++++ b/security/oc_svr.c
+@@ -27,6 +27,7 @@
+ #include "oc_ri.h"
+ #include "oc_sp.h"
+ #include "port/oc_log.h"
++#include "oc_ael.h"
+ 
+ void
+ oc_sec_create_svr(void)
+@@ -35,6 +36,7 @@ oc_sec_create_svr(void)
+   oc_sec_pstat_init();
+   oc_sec_cred_init();
+   oc_sec_acl_init();
++  oc_sec_ael_init();
+ 
+ #ifdef OC_PKI
+   oc_sec_sp_init();
+@@ -53,6 +55,9 @@ oc_sec_create_svr(void)
+                               OC_IF_BASELINE, OC_DISCOVERABLE | OC_SECURE,
+                               get_acl, 0, post_acl, delete_acl, 1,
+                               "oic.r.acl2");
++    oc_core_populate_resource(OCF_SEC_AEL, i, "/oic/sec/ael", OC_IF_BASELINE,
++                              OC_IF_BASELINE, OC_DISCOVERABLE, get_ael, 0,
++                              post_ael, 0, 1, "oic.r.ael");
+     oc_core_populate_resource(OCF_SEC_CRED, i, "/oic/sec/cred", OC_IF_BASELINE,
+                               OC_IF_BASELINE, OC_DISCOVERABLE | OC_SECURE,
+                               get_cred, 0, post_cred, delete_cred, 1,
+-- 
+2.16.1.windows.1
+

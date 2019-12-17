@@ -1,0 +1,73 @@
+From ed9cab5b04ffc6904a01557eec2a3fc2a20dcc72 Mon Sep 17 00:00:00 2001
+From: George Nash <george.nash@intel.com>
+Date: Mon, 2 Dec 2019 14:40:47 -0800
+Subject: [PATCH] string to endpoint fix parse error if uri is NULL
+
+The start of the uri path must still be calculated even if uri is
+NULL (i.e. user is not interested in parsing the path component of
+the endpoint). This must be calculated since this value is used
+in later calculations for finding the port number.
+
+See lines 421-425 the `u` variable must be calculated for the code
+to properly calculate `p`. Variable `p` must be accurate or the
+address_len will be incorrect resulting in an incorrect string
+being sent for DNS lookup. Resulting in an error even for valid
+endpoint strings.
+
+With out this fix:
+`coap://openconnectivity.org/alpha` and
+`coaps+tcp://10.211.55.3/a/light` would both return errors
+when the uri param was NULL.
+
+With this fix those endpoint strings are properly parsed.
+
+Change-Id: I2897b4e7aea5f514da81afd1a78161d64f609dac
+Signed-off-by: George Nash <george.nash@intel.com>
+---
+ api/oc_endpoint.c       |  2 +-
+ api/unittest/eptest.cpp | 16 ++++++++++++++++
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/api/oc_endpoint.c b/api/oc_endpoint.c
+index 17a541a..760b2d1 100644
+--- a/api/oc_endpoint.c
++++ b/api/oc_endpoint.c
+@@ -383,8 +383,8 @@ oc_parse_endpoint_string(oc_string_t *endpoint_str, oc_endpoint_t *endpoint,
+ 
+   /* Extract a uri path if requested and available */
+   const char *u = NULL;
++  u = memchr(address, '/', len);
+   if (uri) {
+-    u = memchr(address, '/', len);
+     if (u) {
+       oc_new_string(uri, u, (len - (u - address)));
+     }
+diff --git a/api/unittest/eptest.cpp b/api/unittest/eptest.cpp
+index f078420..77720c1 100644
+--- a/api/unittest/eptest.cpp
++++ b/api/unittest/eptest.cpp
+@@ -154,5 +154,21 @@ TEST(OCEndpoints, StringToEndpoint)
+       oc_free_string(&s);
+       oc_free_string(&uri);
+     }
++
++    // test dns lookup when uri is NULL
++    const char *spu3[4] = { "coap://10.211.55.3:56789/a/light",
++                           "coaps+tcp://10.211.55.3/a/light",
++                           "coap://openconnectivity.org/alpha",
++                           "coaps://openconnectivity.org:3456/alpha" };
++    for (int i = 0; i < 4; i++) {
++      oc_string_t s;
++      oc_new_string(&s, spu3[i], strlen(spu[i]));
++      oc_endpoint_t ep;
++      memset(&ep, 0, sizeof(oc_endpoint_t));
++      int ret = oc_string_to_endpoint(&s, &ep, NULL);
++      EXPECT_EQ(ret, 0) << "spu3[" << i << "] " << spu3[i];
++    }
+ #endif
++
++
+ }
+-- 
+2.16.1.windows.1
+

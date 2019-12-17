@@ -1,0 +1,1004 @@
+From 6f6ffe48da9feff812fe72ffe5f6f01123dde69c Mon Sep 17 00:00:00 2001
+From: George Nash <george.nash@intel.com>
+Date: Fri, 9 Aug 2019 11:50:41 -0700
+Subject: [PATCH] Add OC_STORAGE define that is set in oc_config.h
+
+Persistant storage is currently only enabled if OC_SECURITY
+is defined.  This has lead implementation problems when
+implementing features like introspection, cloud, or
+software-update which also require persistant storage.
+
+This commit replaces the `#ifdef OC_SECURITY` with
+`#ifdef OC_STORAGE` in oc_storage.c.
+
+Inside config.h OC_STORAGE is defined if OC_SECURITY, OC_IDD_API
+OC_SOFTWARE_UPDATE, or OC_SECURITY is defined.
+
+Also updated samples that call oc_storage_config so they call it
+if OC_STORAGE is defined instead of OC_SECURITY.
+
+Removed the dummy storage implmentation from the
+oc_cloud_storage.c since OC_STORAGE is now defined by default
+when OC_CLOUD is defined.
+
+Some preprocessor check were added to check it one of the
+features that require OC_STORAGE is set but OC_STORAGE is not
+set. This will cause a build error and inform developers to
+check oc_config.h to make sure OC_STORAGE is set there.
+
+Change-Id: I9a9242349e939393f190cab373fe7d0252ae656c
+Signed-off-by: George Nash <george.nash@intel.com>
+---
+ api/cloud/oc_cloud_store.c                    | 35 +++++----------------------
+ api/oc_introspection.c                        | 17 ++++++-------
+ api/oc_swupdate.c                             |  5 ++++
+ apps/client_block_linux.c                     |  4 +--
+ apps/client_collections_linux.c               |  4 +--
+ apps/client_linux.c                           |  4 +--
+ apps/client_multithread_linux.c               |  4 +--
+ apps/cloud_certification_tests.c              |  2 ++
+ apps/cloud_server.c                           |  2 ++
+ apps/multi_device_client_linux.c              |  4 +--
+ apps/multi_device_server_linux.c              |  4 +--
+ apps/server_block_linux.c                     |  4 +--
+ apps/server_collections_linux.c               |  4 +--
+ apps/server_linux.c                           |  4 +--
+ apps/server_multithread_linux.c               |  4 +--
+ apps/simpleclient.c                           |  4 +--
+ apps/simpleclient_windows.c                   |  4 +--
+ apps/simpleserver.c                           |  4 +--
+ apps/simpleserver_pki.c                       |  4 +--
+ apps/simpleserver_windows.c                   |  6 ++---
+ apps/smart_home_server_linux.c                |  4 +--
+ apps/smart_home_server_with_mock_swupdate.cpp |  4 +--
+ apps/smart_lock_linux.c                       |  4 +--
+ apps/temp_sensor_client_linux.c               |  4 +--
+ onboarding_tool/obtmain.c                     |  2 ++
+ port/android/oc_config.h                      | 14 +++++++++++
+ port/android/storage.c                        |  5 ++--
+ port/contiki/oc_config.h                      | 14 +++++++++++
+ port/contiki/storage.c                        |  6 +++--
+ port/freertos/oc_config.h                     | 14 +++++++++++
+ port/freertos/storage.c                       |  8 +++---
+ port/linux/oc_config.h                        | 14 +++++++++++
+ port/linux/storage.c                          |  5 ++--
+ port/openthread/oc_config.h                   | 14 +++++++++++
+ port/openthread/storage.c                     |  5 ++--
+ port/riot/oc_config.h                         | 14 +++++++++++
+ port/riot/storage.c                           |  6 +++--
+ port/tizenrt/oc_config.h                      | 14 +++++++++++
+ port/tizenrt/storage.c                        |  7 +++---
+ port/windows/oc_config.h                      | 14 +++++++++++
+ port/windows/storage.c                        |  5 ++--
+ port/zephyr/src/oc_config.h                   | 14 +++++++++++
+ port/zephyr/src/storage.c                     |  6 +++--
+ security/oc_obt.c                             |  6 +++++
+ 44 files changed, 227 insertions(+), 99 deletions(-)
+
+diff --git a/api/cloud/oc_cloud_store.c b/api/cloud/oc_cloud_store.c
+index 981b722..1b5563b 100644
+--- a/api/cloud/oc_cloud_store.c
++++ b/api/cloud/oc_cloud_store.c
+@@ -21,43 +21,20 @@
+ #include "oc_api.h"
+ #include "oc_cloud_internal.h"
+ #include "oc_rep.h"
++#include "oc_config.h"
+ #ifdef OC_DYNAMIC_ALLOCATION
+ #include <stdlib.h>
+ #endif /* OC_DYNAMIC_ALLOCATION */
+ 
++#ifndef OC_STORAGE
++#error Preprocessor macro OC_CLOUD is defined but OC_STORAGE is not defined \
++check oc_config.h and make sure OC_STORAGE is defined if OC_CLOUD is defined.
++#endif
++
+ #define CLOUD_STORE_NAME "cloud"
+ 
+ #define CLOUD_TAG_MAX (32)
+ 
+-#ifndef OC_SECURITY
+-// dummy storage
+-int
+-oc_storage_config(const char *store)
+-{
+-  (void)store;
+-  return 0;
+-}
+-
+-long
+-oc_storage_read(const char *store, uint8_t *buf, size_t size)
+-{
+-  (void)store;
+-  (void)buf;
+-  (void)size;
+-  return -1;
+-}
+-
+-long
+-oc_storage_write(const char *store, uint8_t *buf, size_t size)
+-{
+-  (void)store;
+-  (void)buf;
+-  (void)size;
+-  return -1;
+-}
+-
+-#endif
+-
+ static int cloud_store_load_internal(const char *store_name,
+                                      oc_cloud_store_t *store);
+ static void gen_cloud_tag(const char *name, size_t device, char *cloud_tag);
+diff --git a/api/oc_introspection.c b/api/oc_introspection.c
+index 04e4215..0ef0ee1 100644
+--- a/api/oc_introspection.c
++++ b/api/oc_introspection.c
+@@ -22,14 +22,19 @@
+ #include "oc_introspection_internal.h"
+ #include <inttypes.h>
+ #include <stdio.h>
++#include "oc_config.h"
+ 
+ #ifndef OC_IDD_API
+ #include "server_introspection.dat.h"
+ #else /* OC_IDD_API */
+ 
++#if !defined(OC_STORAGE) && defined(OC_IDD_API)
++#error Preprocessor macro OC_IDD_API is defined but OC_STORAGE is not defined \
++check oc_config.h and make sure OC_STORAGE is defined if OC_IDD_API is defined.
++#endif
++
+ #define MAX_TAG_LENGTH 20
+ 
+-#ifdef OC_SECURITY
+ static void
+ gen_idd_tag(const char *name, size_t device_index, char *idd_tag)
+ {
+@@ -39,19 +44,13 @@ gen_idd_tag(const char *name, size_t device_index, char *idd_tag)
+     (idd_tag_len < MAX_TAG_LENGTH) ? idd_tag_len + 1 : MAX_TAG_LENGTH;
+   idd_tag[idd_tag_len] = '\0';
+ }
+-#endif /* OC_SECURITY */
+ 
+ void
+ oc_set_introspection_data(size_t device, uint8_t *IDD, size_t IDD_size)
+ {
+-  (void) device;
+-  (void) IDD;
+-  (void) IDD_size;
+-#ifdef OC_SECURITY
+   char idd_tag[MAX_TAG_LENGTH];
+   gen_idd_tag("IDD", device, idd_tag);
+   oc_storage_write(idd_tag, IDD, IDD_size);
+-#endif /* OC_SECURITY */
+ }
+ #endif /*OC_IDD_API*/
+ 
+@@ -73,13 +72,11 @@ oc_core_introspection_data_handler(oc_request_t *request,
+   } else {
+     IDD_size = -1;
+   }
+-#else /* OC_IDD_API */
+-#ifdef OC_SECURITY
++#else  /* OC_IDD_API */
+   char idd_tag[MAX_TAG_LENGTH];
+   gen_idd_tag("IDD", request->resource->device, idd_tag);
+   IDD_size = oc_storage_read(
+     idd_tag, request->response->response_buffer->buffer, OC_MAX_APP_DATA_SIZE);
+-#endif /* OC_SECURITY */
+ #endif /* OC_IDD_API */
+ 
+   if (IDD_size >= 0 && IDD_size < OC_MAX_APP_DATA_SIZE) {
+diff --git a/api/oc_swupdate.c b/api/oc_swupdate.c
+index f4d5081..ed310f9 100644
+--- a/api/oc_swupdate.c
++++ b/api/oc_swupdate.c
+@@ -22,6 +22,11 @@
+ #include "oc_swupdate_internal.h"
+ #include "security/oc_pstat.h"
+ 
++#ifndef OC_STORAGE
++#error Preprocessor macro OC_SOFTWARE_UPDATE is defined but OC_STORAGE is not defined \
++check oc_config.h and make sure OC_STORAGE is defined if OC_SOFTWARE_UPDATE is defined.
++#endif
++
+ #ifdef OC_DYNAMIC_ALLOCATION
+ #include "port/oc_assert.h"
+ #include <stdlib.h>
+diff --git a/apps/client_block_linux.c b/apps/client_block_linux.c
+index 9acbcb1..92ccf03 100644
+--- a/apps/client_block_linux.c
++++ b/apps/client_block_linux.c
+@@ -176,9 +176,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./client_block_linux_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   oc_set_mtu_size(300);
+   oc_set_max_app_data_size(2048);
+diff --git a/apps/client_collections_linux.c b/apps/client_collections_linux.c
+index 587aaa1..13810e4 100644
+--- a/apps/client_collections_linux.c
++++ b/apps/client_collections_linux.c
+@@ -427,9 +427,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./client_collections_linux_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+diff --git a/apps/client_linux.c b/apps/client_linux.c
+index aaa3203..c64ce9e 100644
+--- a/apps/client_linux.c
++++ b/apps/client_linux.c
+@@ -163,9 +163,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./client_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   oc_set_con_res_announced(false);
+   init = oc_main_init(&handler);
+diff --git a/apps/client_multithread_linux.c b/apps/client_multithread_linux.c
+index f8576e2..f004990 100644
+--- a/apps/client_multithread_linux.c
++++ b/apps/client_multithread_linux.c
+@@ -394,9 +394,9 @@ main(void)
+                                         .signal_event_loop =
+                                           signal_event_loop };
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./client_multithread_linux_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   if (pthread_mutex_init(&mutex, NULL) < 0) {
+     printf("pthread_mutex_init failed!\n");
+diff --git a/apps/cloud_certification_tests.c b/apps/cloud_certification_tests.c
+index 4ba04a6..748b7d6 100644
+--- a/apps/cloud_certification_tests.c
++++ b/apps/cloud_certification_tests.c
+@@ -565,7 +565,9 @@ ocf_event_thread(void *data)
+                                         .register_resources =
+                                           register_resources };
+ 
++#ifdef OC_STORAGE
+   oc_storage_config("./cloud_tests_creds");
++#endif /* OC_STORAGE */
+ 
+   if (pthread_mutex_init(&mutex, NULL) < 0) {
+     printf("pthread_mutex_init failed!\n");
+diff --git a/apps/cloud_server.c b/apps/cloud_server.c
+index c5186aa..573e0d7 100644
+--- a/apps/cloud_server.c
++++ b/apps/cloud_server.c
+@@ -296,7 +296,9 @@ main(void)
+                                         .signal_event_loop = signal_event_loop,
+                                         .register_resources =
+                                           register_resources };
++#ifdef OC_STORAGE
+   oc_storage_config("./cloud_server_creds/");
++#endif /* OC_STORAGE */
+ 
+   ret = oc_main_init(&handler);
+   if (ret < 0)
+diff --git a/apps/multi_device_client_linux.c b/apps/multi_device_client_linux.c
+index 9aa56ab..a8c97c9 100644
+--- a/apps/multi_device_client_linux.c
++++ b/apps/multi_device_client_linux.c
+@@ -347,9 +347,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./multi_device_client_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+diff --git a/apps/multi_device_server_linux.c b/apps/multi_device_server_linux.c
+index 1a18334..d1a1e4b 100644
+--- a/apps/multi_device_server_linux.c
++++ b/apps/multi_device_server_linux.c
+@@ -228,9 +228,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./multi_device_server_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+diff --git a/apps/server_block_linux.c b/apps/server_block_linux.c
+index 948e3be..28e8bf5 100644
+--- a/apps/server_block_linux.c
++++ b/apps/server_block_linux.c
+@@ -142,9 +142,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./server_block_linux_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   oc_set_mtu_size(200);
+   oc_set_max_app_data_size(2048);
+diff --git a/apps/server_collections_linux.c b/apps/server_collections_linux.c
+index 4fbe43b..7f3d501 100644
+--- a/apps/server_collections_linux.c
++++ b/apps/server_collections_linux.c
+@@ -338,9 +338,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./server_collections_linux_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+diff --git a/apps/server_linux.c b/apps/server_linux.c
+index fd6375d..850b57e 100644
+--- a/apps/server_linux.c
++++ b/apps/server_linux.c
+@@ -144,9 +144,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./server_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+diff --git a/apps/server_multithread_linux.c b/apps/server_multithread_linux.c
+index 857ca97..aca15fe 100644
+--- a/apps/server_multithread_linux.c
++++ b/apps/server_multithread_linux.c
+@@ -267,9 +267,9 @@ main(void)
+                                        .register_resources =
+                                          register_resources };
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./server_multithread_linux_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   if (pthread_mutex_init(&mutex, NULL) < 0) {
+     printf("pthread_mutex_init failed!\n");
+diff --git a/apps/simpleclient.c b/apps/simpleclient.c
+index 4797084..cc6bf83 100644
+--- a/apps/simpleclient.c
++++ b/apps/simpleclient.c
+@@ -261,9 +261,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./simpleclient_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+diff --git a/apps/simpleclient_windows.c b/apps/simpleclient_windows.c
+index 71c61be..2e2d471 100644
+--- a/apps/simpleclient_windows.c
++++ b/apps/simpleclient_windows.c
+@@ -260,9 +260,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./simpleclient_creds/");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+diff --git a/apps/simpleserver.c b/apps/simpleserver.c
+index 42d70d7..5119e00 100644
+--- a/apps/simpleserver.c
++++ b/apps/simpleserver.c
+@@ -155,9 +155,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./simpleserver_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+diff --git a/apps/simpleserver_pki.c b/apps/simpleserver_pki.c
+index e8d6618..767b1e7 100644
+--- a/apps/simpleserver_pki.c
++++ b/apps/simpleserver_pki.c
+@@ -391,9 +391,9 @@ main(void)
+   oc_set_mtu_size(16384);
+   oc_set_max_app_data_size(16384);
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./simpleserver_pki_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   oc_set_factory_presets_cb(factory_presets_cb, NULL);
+ 
+diff --git a/apps/simpleserver_windows.c b/apps/simpleserver_windows.c
+index affdcd1..6aa5fd4 100644
+--- a/apps/simpleserver_windows.c
++++ b/apps/simpleserver_windows.c
+@@ -151,9 +151,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./simpleserver_creds/");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   init = oc_main_init(&handler);
+   if (init < 0)
+@@ -174,4 +174,4 @@ main(void)
+ 
+   oc_main_shutdown();
+   return 0;
+-}
+\ No newline at end of file
++}
+diff --git a/apps/smart_home_server_linux.c b/apps/smart_home_server_linux.c
+index 165611f..fc6aed7 100644
+--- a/apps/smart_home_server_linux.c
++++ b/apps/smart_home_server_linux.c
+@@ -691,9 +691,9 @@ main(void)
+   oc_set_con_res_announced(false);
+   oc_set_max_app_data_size(16384);
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./smart_home_server_linux_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   oc_set_factory_presets_cb(factory_presets_cb, NULL);
+ #ifdef OC_SECURITY
+diff --git a/apps/smart_home_server_with_mock_swupdate.cpp b/apps/smart_home_server_with_mock_swupdate.cpp
+index 050f0b7..1cb5dcd 100644
+--- a/apps/smart_home_server_with_mock_swupdate.cpp
++++ b/apps/smart_home_server_with_mock_swupdate.cpp
+@@ -310,9 +310,9 @@ main(void)
+   oc_set_con_res_announced(false);
+   oc_set_max_app_data_size(16384);
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./smart_home_server_with_mock_swupdate_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   oc_set_factory_presets_cb(factory_presets_cb, NULL);
+ #ifdef OC_SECURITY
+diff --git a/apps/smart_lock_linux.c b/apps/smart_lock_linux.c
+index d5d8831..0715e62 100644
+--- a/apps/smart_lock_linux.c
++++ b/apps/smart_lock_linux.c
+@@ -412,10 +412,10 @@ main(void)
+                                         .signal_event_loop = signal_event_loop,
+                                         .requests_entry = issue_requests };
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./smart_lock_creds");
+   oc_set_random_pin_callback(random_pin_cb, NULL);
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   oc_set_con_res_announced(false);
+   init = oc_main_init(&handler);
+diff --git a/apps/temp_sensor_client_linux.c b/apps/temp_sensor_client_linux.c
+index 62a9be2..03ddd0b 100644
+--- a/apps/temp_sensor_client_linux.c
++++ b/apps/temp_sensor_client_linux.c
+@@ -141,9 +141,9 @@ main(void)
+ 
+   oc_clock_time_t next_event;
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+   oc_storage_config("./temp_sensor_creds");
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+ 
+   int init = oc_main_init(&handler);
+ 
+diff --git a/onboarding_tool/obtmain.c b/onboarding_tool/obtmain.c
+index 551404b..27fb852 100644
+--- a/onboarding_tool/obtmain.c
++++ b/onboarding_tool/obtmain.c
+@@ -1710,7 +1710,9 @@ main(void)
+                                         .signal_event_loop = signal_event_loop,
+                                         .requests_entry = issue_requests };
+ 
++#ifdef OC_STORAGE
+   oc_storage_config("./onboarding_tool_creds");
++#endif /* OC_STORAGE */
+   oc_set_factory_presets_cb(factory_presets_cb, NULL);
+   oc_set_con_res_announced(false);
+   oc_set_max_app_data_size(16384);
+diff --git a/port/android/oc_config.h b/port/android/oc_config.h
+index 4e0bf05..adb883c 100644
+--- a/port/android/oc_config.h
++++ b/port/android/oc_config.h
+@@ -89,6 +89,20 @@ typedef uint64_t oc_clock_time_t;
+ 
+ #endif /* !OC_DYNAMIC_ALLOCATION */
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/port/android/storage.c b/port/android/storage.c
+index a51510e..5c05187 100644
+--- a/port/android/storage.c
++++ b/port/android/storage.c
+@@ -14,9 +14,10 @@
+ // limitations under the License.
+ */
+ 
++#include "oc_config.h"
+ #include "port/oc_storage.h"
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+ #include <errno.h>
+ #include <stdbool.h>
+ #include <stdio.h>
+@@ -82,4 +83,4 @@ oc_storage_write(const char *store, uint8_t *buf, size_t size)
+   fclose(fp);
+   return size;
+ }
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/port/contiki/oc_config.h b/port/contiki/oc_config.h
+index 034cbba..9fcc45f 100644
+--- a/port/contiki/oc_config.h
++++ b/port/contiki/oc_config.h
+@@ -61,6 +61,20 @@ typedef uint64_t oc_clock_time_t;
+ /* Max inactivity timeout before tearing down DTLS connection */
+ #define OC_DTLS_INACTIVITY_TIMEOUT (10)
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/port/contiki/storage.c b/port/contiki/storage.c
+index 8cdac34..1bef5e9 100644
+--- a/port/contiki/storage.c
++++ b/port/contiki/storage.c
+@@ -14,7 +14,9 @@
+ // limitations under the License.
+ */
+ 
+-#ifdef OC_SECURITY
++#include "oc_config.h"
++
++#ifdef OC_STORAGE
+ 
+ #include "port/oc_storage.h"
+ 
+@@ -83,4 +85,4 @@ oc_storage_write(const char *store, uint8_t *buf, size_t size)
+   return size;
+ }
+ 
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/port/freertos/oc_config.h b/port/freertos/oc_config.h
+index 8395cb6..5163dc0 100644
+--- a/port/freertos/oc_config.h
++++ b/port/freertos/oc_config.h
+@@ -89,6 +89,20 @@ typedef uint64_t oc_clock_time_t;
+ 
+ #endif /* !OC_DYNAMIC_ALLOCATION */
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/port/freertos/storage.c b/port/freertos/storage.c
+index 47b4ad6..0bcffb3 100644
+--- a/port/freertos/storage.c
++++ b/port/freertos/storage.c
+@@ -15,11 +15,11 @@
+ // limitations under the License.
+ */
+ 
+-#include "port/oc_storage.h"
++#include "oc_config.h"
+ #include "port/oc_assert.h"
++#include "port/oc_storage.h"
+ 
+-#ifdef OC_SECURITY
+-
++#ifdef OC_STORAGE
+ int
+ oc_storage_config(const char *store)
+ {
+@@ -45,4 +45,4 @@ oc_storage_write(const char *store, uint8_t *buf, size_t size)
+   oc_abort(__func__);
+   return size;
+ }
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/port/linux/oc_config.h b/port/linux/oc_config.h
+index bd04b26..809aa03 100644
+--- a/port/linux/oc_config.h
++++ b/port/linux/oc_config.h
+@@ -96,6 +96,20 @@ typedef uint64_t oc_clock_time_t;
+ 
+ #endif /* !OC_DYNAMIC_ALLOCATION */
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/port/linux/storage.c b/port/linux/storage.c
+index ab0c0b2..e5f4ce2 100644
+--- a/port/linux/storage.c
++++ b/port/linux/storage.c
+@@ -14,9 +14,10 @@
+ // limitations under the License.
+ */
+ 
++#include "oc_config.h"
+ #include "port/oc_storage.h"
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+ #include <errno.h>
+ #include <stdbool.h>
+ #include <stdio.h>
+@@ -83,4 +84,4 @@ oc_storage_write(const char *store, uint8_t *buf, size_t size)
+   fclose(fp);
+   return size;
+ }
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/port/openthread/oc_config.h b/port/openthread/oc_config.h
+index 1815f70..f647d1d 100644
+--- a/port/openthread/oc_config.h
++++ b/port/openthread/oc_config.h
+@@ -61,6 +61,20 @@ typedef uint64_t oc_clock_time_t;
+ /* Max inactivity timeout before tearing down DTLS connection */
+ #define OC_DTLS_INACTIVITY_TIMEOUT (10)
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #ifdef __cplusplus
+ } // extern "C"
+ #endif
+diff --git a/port/openthread/storage.c b/port/openthread/storage.c
+index 5c2d893..7e04c6b 100644
+--- a/port/openthread/storage.c
++++ b/port/openthread/storage.c
+@@ -14,8 +14,9 @@
+ // limitations under the License.
+ */
+ 
++#include "oc_config.h"
+ #include "port/oc_storage.h"
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+ 
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/port/riot/oc_config.h b/port/riot/oc_config.h
+index 2eedd56..ead8fbd 100644
+--- a/port/riot/oc_config.h
++++ b/port/riot/oc_config.h
+@@ -60,6 +60,20 @@ typedef uint64_t oc_clock_time_t;
+ /* Max inactivity timeout before tearing down DTLS connection */
+ #define OC_DTLS_INACTIVITY_TIMEOUT (10)
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/port/riot/storage.c b/port/riot/storage.c
+index 473a5b6..7b3b174 100644
+--- a/port/riot/storage.c
++++ b/port/riot/storage.c
+@@ -14,8 +14,10 @@
+ // limitations under the License.
+ */
+ 
++#include "oc_config.h"
+ #include "port/oc_storage.h"
+-#ifdef OC_SECURITY
++
++#ifdef OC_STORAGE
+ // TODO:
+ 
+ int
+@@ -42,4 +44,4 @@ oc_storage_write(const char *store, uint8_t *buf, size_t size)
+   (void)size;
+   return size;
+ }
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/port/tizenrt/oc_config.h b/port/tizenrt/oc_config.h
+index 0f291bf..79428e5 100644
+--- a/port/tizenrt/oc_config.h
++++ b/port/tizenrt/oc_config.h
+@@ -92,6 +92,20 @@ typedef uint64_t oc_clock_time_t;
+ 
+ #endif /* !OC_DYNAMIC_ALLOCATION */
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #ifdef __cplusplus
+ } // extern "C"
+ #endif
+diff --git a/port/tizenrt/storage.c b/port/tizenrt/storage.c
+index 47b4ad6..c788272 100644
+--- a/port/tizenrt/storage.c
++++ b/port/tizenrt/storage.c
+@@ -15,10 +15,11 @@
+ // limitations under the License.
+ */
+ 
+-#include "port/oc_storage.h"
++#include "oc_config.h"
+ #include "port/oc_assert.h"
++#include "port/oc_storage.h"
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+ 
+ int
+ oc_storage_config(const char *store)
+@@ -45,4 +46,4 @@ oc_storage_write(const char *store, uint8_t *buf, size_t size)
+   oc_abort(__func__);
+   return size;
+ }
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/port/windows/oc_config.h b/port/windows/oc_config.h
+index 3eaa41c..686332b 100644
+--- a/port/windows/oc_config.h
++++ b/port/windows/oc_config.h
+@@ -42,6 +42,20 @@ typedef uint64_t oc_clock_time_t;
+ /* Maximum number of callbacks for connection of session */
+ #define OC_MAX_SESSION_EVENT_CBS (2)
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/port/windows/storage.c b/port/windows/storage.c
+index aad8f57..bccf24e 100644
+--- a/port/windows/storage.c
++++ b/port/windows/storage.c
+@@ -14,9 +14,10 @@
+ // limitations under the License.
+ */
+ 
++#include "oc_config.h"
+ #include "port/oc_storage.h"
+ 
+-#ifdef OC_SECURITY
++#ifdef OC_STORAGE
+ #include <errno.h>
+ #include <stdbool.h>
+ #include <stdio.h>
+@@ -89,4 +90,4 @@ oc_storage_write(const char *store, uint8_t *buf, size_t size)
+   fclose(fp);
+   return (long)size;
+ }
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/port/zephyr/src/oc_config.h b/port/zephyr/src/oc_config.h
+index 8660e00..fd026a7 100644
+--- a/port/zephyr/src/oc_config.h
++++ b/port/zephyr/src/oc_config.h
+@@ -58,4 +58,18 @@ typedef uint64_t oc_clock_time_t;
+ /* Max inactivity timeout before tearing down DTLS connection */
+ #define OC_DTLS_INACTIVITY_TIMEOUT (10)
+ 
++/* library features that require persistent storage */
++#ifdef OC_SECURITY
++#define OC_STORAGE
++#endif
++#ifdef OC_IDD_API
++#define OC_STORAGE
++#endif
++#ifdef OC_CLOUD
++#define OC_STORAGE
++#endif
++#ifdef OC_SOFTWARE_UPDATE
++#define OC_STORAGE
++#endif
++
+ #endif /* OC_CONFIG_H */
+diff --git a/port/zephyr/src/storage.c b/port/zephyr/src/storage.c
+index 4fd27f7..ac736b7 100644
+--- a/port/zephyr/src/storage.c
++++ b/port/zephyr/src/storage.c
+@@ -14,7 +14,9 @@
+  // limitations under the License.
+  */
+ 
+-#ifdef OC_SECURITY
++#include "oc_config.h"
++
++#ifdef OC_STORAGE
+ 
+ #include <device.h>
+ #include <flash.h>
+@@ -386,4 +388,4 @@ oc_storage_write(const char *store, uint8_t *buf, size_t size)
+   return size;
+ }
+ 
+-#endif /* OC_SECURITY */
++#endif /* OC_STORAGE */
+diff --git a/security/oc_obt.c b/security/oc_obt.c
+index a9219d5..0658982 100644
+--- a/security/oc_obt.c
++++ b/security/oc_obt.c
+@@ -14,11 +14,17 @@
+ // limitations under the License.
+ */
+ 
++#include "oc_config.h"
+ #ifdef OC_SECURITY
+ #ifndef OC_DYNAMIC_ALLOCATION
+ #error "ERROR: Please rebuild with OC_DYNAMIC_ALLOCATION"
+ #endif /* !OC_DYNAMIC_ALLOCATION */
+ 
++#ifndef OC_STORAGE
++#error Preprocessor macro OC_SECURITY is defined but OC_STORAGE is not defined \
++check oc_config.h and make sure OC_STORAGE is defined if OC_SECURITY is defined.
++#endif
++
+ #include "oc_obt.h"
+ #include "oc_core_res.h"
+ #include "security/oc_acl_internal.h"
+-- 
+2.16.1.windows.1
+

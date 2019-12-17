@@ -1,0 +1,157 @@
+From 7bd7c3358ab4c324bd567c2884191680be1c6e37 Mon Sep 17 00:00:00 2001
+From: George Nash <george.nash@intel.com>
+Date: Thu, 5 Dec 2019 11:51:10 -0800
+Subject: [PATCH] Update spec version for Java samples
+
+This updates the spec version value for the servers for fargo
+
+Change-Id: I0b2e26fe03e5eab647ea9bb35f6979d41607bd74
+Signed-off-by: George Nash <george.nash@intel.com>
+---
+ .../src/java_lite_simple_server/MyInitHandler.java                    | 2 +-
+ .../src/java_multi_device_server/MyInitHandler.java                   | 4 ++--
+ .../java_onboarding_tool/src/java_onboarding_tool/ObtInitHandler.java | 2 +-
+ .../app/src/main/java/org/iotivity/multideviceserver/InitHandler.java | 2 +-
+ .../app/src/main/java/org/iotivity/onboardingtool/ObtInitHandler.java | 2 +-
+ .../app/src/main/java/org/iotivity/simpleserver/MyInitHandler.java    | 2 +-
+ .../src/java_oc_channel_change_server/InitHandler.java                | 2 +-
+ .../src/java_oc_onboarding_tool/ObtInitHandler.java                   | 2 +-
+ .../src/java_oc_simple_media_server/InitHandler.java                  | 2 +-
+ .../src/java_oc_simple_server/MyInitHandler.java                      | 2 +-
+ 10 files changed, 11 insertions(+), 11 deletions(-)
+
+diff --git a/swig/apps/java_lite_simple_server/src/java_lite_simple_server/MyInitHandler.java b/swig/apps/java_lite_simple_server/src/java_lite_simple_server/MyInitHandler.java
+index 5a532519..1c291b33 100644
+--- a/swig/apps/java_lite_simple_server/src/java_lite_simple_server/MyInitHandler.java
++++ b/swig/apps/java_lite_simple_server/src/java_lite_simple_server/MyInitHandler.java
+@@ -7,7 +7,7 @@ public class MyInitHandler implements OCMainInitHandler {
+     public int initialize() {
+         System.out.println("inside MyInitHandler.initialize()");
+         int ret = OCMain.initPlatform("Intel");
+-        ret |= OCMain.addDevice("/oic/d", "oic.d.light", "Lamp", "ocf.1.0.0", "ocf.res.1.0.0");
++        ret |= OCMain.addDevice("/oic/d", "oic.d.light", "Lamp", "ocf.2.1.0", "ocf.res.1.0.0");
+         Light.name = "John's Light";
+         Light.power = 0;
+         Light.state = false;
+diff --git a/swig/apps/java_multi_device_server/src/java_multi_device_server/MyInitHandler.java b/swig/apps/java_multi_device_server/src/java_multi_device_server/MyInitHandler.java
+index 0a0b8028..ba5f7873 100644
+--- a/swig/apps/java_multi_device_server/src/java_multi_device_server/MyInitHandler.java
++++ b/swig/apps/java_multi_device_server/src/java_multi_device_server/MyInitHandler.java
+@@ -8,8 +8,8 @@ public class MyInitHandler implements OCMainInitHandler {
+         System.out.println("inside MyInitHandler.initialize()");
+ 
+         int ret = OCMain.initPlatform("Refrigerator");
+-        ret |= OCMain.addDevice("/oic/d", "oic.d.refrigerator", "My fridge", "ocf.1.0.0", "ocf.res.1.0.0");
+-        ret |= OCMain.addDevice("/oic/d", "oic.d.thermostat", "My thermostat", "ocf.1.0.0", "ocf.res.1.0.0");
++        ret |= OCMain.addDevice("/oic/d", "oic.d.refrigerator", "My fridge", "ocf.2.1.0", "ocf.res.1.0.0");
++        ret |= OCMain.addDevice("/oic/d", "oic.d.thermostat", "My thermostat", "ocf.2.1.0", "ocf.res.1.0.0");
+ 
+         // Initialize fridge device values
+         Fridge.filter = 0;
+diff --git a/swig/apps/java_onboarding_tool/src/java_onboarding_tool/ObtInitHandler.java b/swig/apps/java_onboarding_tool/src/java_onboarding_tool/ObtInitHandler.java
+index dc75338d..549e9b06 100644
+--- a/swig/apps/java_onboarding_tool/src/java_onboarding_tool/ObtInitHandler.java
++++ b/swig/apps/java_onboarding_tool/src/java_onboarding_tool/ObtInitHandler.java
+@@ -8,7 +8,7 @@ public class ObtInitHandler implements OCMainInitHandler {
+     public int initialize() {
+         System.out.println("inside ObtInitHandler.initilize()");
+         int ret = OCMain.initPlatform("OCF");
+-        ret |= OCMain.addDevice("/oic/d", "oic.d.dots", "OBT", "ocf.2.0.5", "ocf.res.1.0.0,ocf.sh.1.0.0");
++        ret |= OCMain.addDevice("/oic/d", "oic.d.dots", "OBT", "ocf.2.1.0", "ocf.res.1.0.0,ocf.sh.1.0.0");
+         OCMain.deviceBindResourceType(0, "oic.d.ams");
+         OCMain.deviceBindResourceType(0, "oic.d.cms");
+         return ret;
+diff --git a/swig/apps/oc/android_multi_device_server/MultiDeviceServer/app/src/main/java/org/iotivity/multideviceserver/InitHandler.java b/swig/apps/oc/android_multi_device_server/MultiDeviceServer/app/src/main/java/org/iotivity/multideviceserver/InitHandler.java
+index 4afed5a9..1390a8cb 100644
+--- a/swig/apps/oc/android_multi_device_server/MultiDeviceServer/app/src/main/java/org/iotivity/multideviceserver/InitHandler.java
++++ b/swig/apps/oc/android_multi_device_server/MultiDeviceServer/app/src/main/java/org/iotivity/multideviceserver/InitHandler.java
+@@ -38,7 +38,7 @@ public class InitHandler implements OCMainInitHandler {
+         int ret = ocPlatform.platformInit("Intel");
+         if (ret >= 0) {
+             // Create the devices and add them to the platform
+-            lightDevice = new OcDevice("/oic/d", "oic.d.light", "Lamp", "ocf.1.0.0", "ocf.res.1.0.0");
++            lightDevice = new OcDevice("/oic/d", "oic.d.light", "Lamp", "ocf.2.1.0", "ocf.res.1.0.0");
+             refrigeratorDevice = new OcDevice("/oic/d", "oic.d.refrigerator", "Refrigerator", "ocf.1.0.0", "ocf.res.1.0.0");
+             thermostatDevice = new OcDevice("/oic/d", "oic.d.thermostat", "Thermostat", "ocf.1.0.0", "ocf.res.1.0.0");
+             televisionDevice = new OcDevice("/oic/d", "oic.d.tv", "Television", "ocf.1.0.0", "ocf.res.1.0.0");
+diff --git a/swig/apps/oc/android_on_boarding_tool/OnBoardingTool/app/src/main/java/org/iotivity/onboardingtool/ObtInitHandler.java b/swig/apps/oc/android_on_boarding_tool/OnBoardingTool/app/src/main/java/org/iotivity/onboardingtool/ObtInitHandler.java
+index b307ac34..c6bc9e85 100644
+--- a/swig/apps/oc/android_on_boarding_tool/OnBoardingTool/app/src/main/java/org/iotivity/onboardingtool/ObtInitHandler.java
++++ b/swig/apps/oc/android_on_boarding_tool/OnBoardingTool/app/src/main/java/org/iotivity/onboardingtool/ObtInitHandler.java
+@@ -23,7 +23,7 @@ public class ObtInitHandler implements OCMainInitHandler {
+         Log.d(TAG, "inside ObtInitHandler.initialize()");
+         int ret = obtPlatform.platformInit("OCF");
+         if (ret >= 0) {
+-            OcDevice device = new OcDevice("/oic/d", "oic.d.dots", "OBT", "ocf.2.0.5", "ocf.res.1.0.0,ocf.sh.1.0.0");
++            OcDevice device = new OcDevice("/oic/d", "oic.d.dots", "OBT", "ocf.2.1.0", "ocf.res.1.0.0,ocf.sh.1.0.0");
+             ret |= obtPlatform.addDevice(device);
+             // Note: device must be added to platform before additional resource types can be added
+             device.bindResourceType("oic.d.ams");
+diff --git a/swig/apps/oc/android_simple_server/SimpleServer/app/src/main/java/org/iotivity/simpleserver/MyInitHandler.java b/swig/apps/oc/android_simple_server/SimpleServer/app/src/main/java/org/iotivity/simpleserver/MyInitHandler.java
+index 7c542796..bb2eb3a8 100644
+--- a/swig/apps/oc/android_simple_server/SimpleServer/app/src/main/java/org/iotivity/simpleserver/MyInitHandler.java
++++ b/swig/apps/oc/android_simple_server/SimpleServer/app/src/main/java/org/iotivity/simpleserver/MyInitHandler.java
+@@ -30,7 +30,7 @@ public class MyInitHandler implements OCMainInitHandler {
+         Log.d(TAG, "inside MyInitHandler.initialize()");
+         int ret = ocPlatform.platformInit("Intel");
+         if (ret >= 0) {
+-            device = new OcDevice("/oic/d", "oic.d.light", "Lamp", "ocf.1.0.0", "ocf.res.1.0.0");
++            device = new OcDevice("/oic/d", "oic.d.light", "Lamp", "ocf.2.1.0", "ocf.res.1.0.0");
+             ret |= ocPlatform.addDevice(device);
+         }
+ 
+diff --git a/swig/apps/oc/java_oc_channel_change_server/src/java_oc_channel_change_server/InitHandler.java b/swig/apps/oc/java_oc_channel_change_server/src/java_oc_channel_change_server/InitHandler.java
+index 7582aa68..d9dde40c 100644
+--- a/swig/apps/oc/java_oc_channel_change_server/src/java_oc_channel_change_server/InitHandler.java
++++ b/swig/apps/oc/java_oc_channel_change_server/src/java_oc_channel_change_server/InitHandler.java
+@@ -34,7 +34,7 @@ public class InitHandler implements OCMainInitHandler {
+ 
+         int ret = platform.platformInit("Intel");
+         if (ret >= 0) {
+-            device = new OcDevice("/oic/d", "oic.d.media.server", "ChannelChangeServer", "ocf.1.0.0", "ocf.res.1.0.0");
++            device = new OcDevice("/oic/d", "oic.d.media.server", "ChannelChangeServer", "ocf.2.1.0", "ocf.res.1.0.0");
+             ret |= platform.addDevice(device);
+         }
+ 
+diff --git a/swig/apps/oc/java_oc_onboarding_tool/src/java_oc_onboarding_tool/ObtInitHandler.java b/swig/apps/oc/java_oc_onboarding_tool/src/java_oc_onboarding_tool/ObtInitHandler.java
+index 675b1f4f..4dc622d0 100644
+--- a/swig/apps/oc/java_oc_onboarding_tool/src/java_oc_onboarding_tool/ObtInitHandler.java
++++ b/swig/apps/oc/java_oc_onboarding_tool/src/java_oc_onboarding_tool/ObtInitHandler.java
+@@ -17,7 +17,7 @@ public class ObtInitHandler implements OCMainInitHandler {
+ 
+         int ret = obtPlatform.platformInit("OBT");
+         if (ret >= 0) {
+-            OcDevice device = new OcDevice("/oic/d", "oic.d.dots", "OBT", "ocf.2.0.5", "ocf.res.1.0.0,ocf.sh.1.0.0");
++            OcDevice device = new OcDevice("/oic/d", "oic.d.dots", "OBT", "ocf.2.1.0", "ocf.res.1.0.0,ocf.sh.1.0.0");
+             ret |= obtPlatform.addDevice(device);
+             // Note: device must be added to platform before additional resource
+             // types can be added
+diff --git a/swig/apps/oc/java_oc_simple_media_server/src/java_oc_simple_media_server/InitHandler.java b/swig/apps/oc/java_oc_simple_media_server/src/java_oc_simple_media_server/InitHandler.java
+index faa47531..7ff4269e 100644
+--- a/swig/apps/oc/java_oc_simple_media_server/src/java_oc_simple_media_server/InitHandler.java
++++ b/swig/apps/oc/java_oc_simple_media_server/src/java_oc_simple_media_server/InitHandler.java
+@@ -43,7 +43,7 @@ public class InitHandler implements OCMainInitHandler {
+ 
+         int ret = platform.platformInit("Intel");
+         if (ret >= 0) {
+-            device = new OcDevice("/oic/d", "oic.d.media.server", "SimpleMediaServer", "ocf.1.0.0", "ocf.res.1.0.0");
++            device = new OcDevice("/oic/d", "oic.d.media.server", "SimpleMediaServer", "ocf.2.1.0", "ocf.res.1.0.0");
+             ret |= platform.addDevice(device);
+         }
+ 
+diff --git a/swig/apps/oc/java_oc_simple_server/src/java_oc_simple_server/MyInitHandler.java b/swig/apps/oc/java_oc_simple_server/src/java_oc_simple_server/MyInitHandler.java
+index 81c500ff..30f08aa9 100644
+--- a/swig/apps/oc/java_oc_simple_server/src/java_oc_simple_server/MyInitHandler.java
++++ b/swig/apps/oc/java_oc_simple_server/src/java_oc_simple_server/MyInitHandler.java
+@@ -37,7 +37,7 @@ public class MyInitHandler implements OCMainInitHandler {
+ 
+         int ret = platform.platformInit("Intel");
+         if (ret >= 0) {
+-            device = new OcDevice("/oic/d", "oic.d.light", "Lamp", "ocf.1.0.0", "ocf.res.1.0.0");
++            device = new OcDevice("/oic/d", "oic.d.light", "Lamp", "ocf.2.1.0", "ocf.res.1.0.0");
+             ret |= platform.addDevice(device);
+         }
+ 
+-- 
+2.16.1.windows.1
+

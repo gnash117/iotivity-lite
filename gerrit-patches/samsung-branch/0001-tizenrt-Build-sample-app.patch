@@ -1,0 +1,149 @@
+From 361aa4483b4295a9baa6caa5d35a19c1e067c19a Mon Sep 17 00:00:00 2001
+From: Philippe Coval <philippe.coval@osg.samsung.com>
+Date: Mon, 14 May 2018 11:54:55 +0200
+Subject: [PATCH] tizenrt: Build sample app
+
+It is prefered to build sample Apps
+on current released versions of Tizen:RT
+but apparently we can't use 1.1 so we align to master temporary
+
+Bug: https://jira.iotivity.org/projects/LITE/issues/LITE-4
+Origin: https://gerrit.iotivity.org/gerrit/#/c/25175
+Change-Id: I54cbb03d343e105891bca66cd5f709027a74e3af
+Signed-off-by: Philippe Coval <philippe.coval@osg.samsung.com>
+---
+ port/tizenrt/Makefile                           | 15 ++++++++++-
+ port/tizenrt/iotlite_apps/iotlite/Kconfig       | 11 ++++++++
+ port/tizenrt/iotlite_apps/iotlite/Kconfig_ENTRY |  2 ++
+ tests/port/tizenrt/Makefile                     | 34 ++++++++++++++++++++++---
+ 4 files changed, 58 insertions(+), 4 deletions(-)
+ create mode 100644 port/tizenrt/iotlite_apps/iotlite/Kconfig
+ create mode 100644 port/tizenrt/iotlite_apps/iotlite/Kconfig_ENTRY
+
+diff --git a/port/tizenrt/Makefile b/port/tizenrt/Makefile
+index a038ff1a..9d01607c 100644
+--- a/port/tizenrt/Makefile
++++ b/port/tizenrt/Makefile
+@@ -115,8 +115,17 @@ SAMPLES_CREDS = $(addsuffix _creds, ${SAMPLES}
+ CONSTRAINED_LIBS = libiotivity-constrained-server.a libiotivity-constrained-client.a \
+ libiotivity-constrained-client-server.a
+ 
++all?= $(MBEDTLS_PATCH_FILE) $(CONSTRAINED_LIBS) $(SAMPLES)
++all+= .built
++BIN ?= ${os_dir}/../external/libexternal$(LIBEXT)
++OBJS+= $(OBJ_COMMON) $(OBJ_CLIENT_SERVER)
+ 
+-all: $(MBEDTLS_PATCH_FILE) $(CONSTRAINED_LIBS) $(SAMPLES)
++
++all: ${all}
++	ls $<
++
++build: $(CONSTRAINED_LIBS) 
++	ls $<
+ 
+ .PHONY: clean
+ 
+@@ -167,3 +176,7 @@ distclean: cleanall
+ 
+ test:
+ 	@echo "TODO: https://jira.iotivity.org/browse/LITE-4"
++
++.built: $(OBJS)
++	$(call ARCHIVE, $(BIN), $(OBJS))
++	$(Q) touch .built
+diff --git a/port/tizenrt/iotlite_apps/iotlite/Kconfig b/port/tizenrt/iotlite_apps/iotlite/Kconfig
+new file mode 100644
+index 00000000..113dad99
+--- /dev/null
++++ b/port/tizenrt/iotlite_apps/iotlite/Kconfig
+@@ -0,0 +1,11 @@
++#
++# For a description of the syntax of this configuration file,
++# see kconfig-language at https://www.kernel.org/doc/Documentation/kbuild/kconfig-language.txt
++#
++
++config EXAMPLES_IOTLITE
++	bool "Enable IoTivity-Lite Demo Example"
++	default n
++	depends on ENABLE_IOTIVITY_CONSTRAINED
++	---help---
++		Enable IoTivity-lite demo example
+diff --git a/port/tizenrt/iotlite_apps/iotlite/Kconfig_ENTRY b/port/tizenrt/iotlite_apps/iotlite/Kconfig_ENTRY
+new file mode 100644
+index 00000000..4622fb32
+--- /dev/null
++++ b/port/tizenrt/iotlite_apps/iotlite/Kconfig_ENTRY
+@@ -0,0 +1,2 @@
++config CONFIG_EXAMPLES_IOTLITE
++	bool "IoTivity-lite Demo Example"
+diff --git a/tests/port/tizenrt/Makefile b/tests/port/tizenrt/Makefile
+index ac5abf30..8b0cacbc 100644
+--- a/tests/port/tizenrt/Makefile
++++ b/tests/port/tizenrt/Makefile
+@@ -30,8 +30,9 @@ tizenrt_dir?=${top_dir}/deps/TizenRT
+ os_dir?=${tizenrt_dir}/os
+ os_url?=https://github.com/Samsung/TizenRT
+ os_branch?=1.1_Public_Release
++os_branch=master
+ os_machine?=artik053
+-os_image_type?=minimal
++os_image_type?=iotlite
+ configure_file?=${os_dir}/.config
+ os_external_makefile?=${tizenrt_dir}/external/Makefile
+ 
+@@ -53,12 +54,17 @@ prep_files+=${CC}
+ prep_files+=${tizenrt_dir}/external/iotivity-constrained.Kconfig.tmp
+ prep_files+=${tizenrt_dir}/external/iotivity-constrained.mk.tmp
+ prep_files+=${top_dir}/deps/tinycbor/LICENSE
+-
++prep_files+=${tizenrt_dir}/apps/iotlite_apps
++prep_files+=${tizenrt_dir}/build/configs/${os_machine}/${os_image_type}
++prep_files+=${tizenrt_dir}/external/iotivity-constrained/iotivity-constrained
++prep_files+=${tizenrt_dir}/external/iotivity-constrained/Make.defs
++prep_files+=${tizenrt_dir}/external/iotivity-constrained/Makefile
++git?=git
+ all?=prep configure build
+ 
+ 
+ ${tizenrt_dir}:
+-	git clone --depth 1 --recursive -b "${os_branch}" "${os_url}" "$@"
++	${git} clone --depth 1 --recursive -b "${os_branch}" "${os_url}" ${tizenrt_dir}
+ 
+ ${tizenrt_dir}/external/iotivity-constrained.mk.tmp: iotivity-constrained.mk ${os_external_makefile}.orig
+ 	cp "$<" "$@.tmp"
+@@ -66,6 +72,9 @@ ${tizenrt_dir}/external/iotivity-constrained.mk.tmp: iotivity-constrained.mk ${o
+ 	mv "$@.tmp" "$@"
+ 	touch "$@"
+ 
++${os_dir}: ${tizenrt_dir}
++	ls $@
++
+ ${os_external_makefile}.orig: ${os_external_makefile}
+ 	ls $@ || cp -av $< $@
+ 
+@@ -130,3 +139,22 @@ all: ${all}
+ 
+ menuconfig: ${os_dir}
+ 	${MAKE} -C "$<" "$@"
++
++${tizenrt_dir}/apps/iotlite_apps: ${top_dir}/port/tizenrt/iotlite_apps ${tizenrt_dir}
++	ls $@ || cp -rfva $< $@
++
++${tizenrt_dir}/build/configs/${os_machine}/${os_image_type}: ${top_dir}/tests/port/tizenrt/configs/${os_machine}/${os_image_type} ${tizenrt_dir}
++	ls $@ || ln -fs $< $@
++
++${tizenrt_dir}/external/iotivity-constrained: ${top_dir} ${tizenrt_dir}
++	ls $@ || ln -fs $< $@
++
++${tizenrt_dir}/external/iotivity-constrained/iotivity-constrained: ${tizenrt_dir}/external/iotivity-constrained
++	ls $@ || ln -fs . $@
++
++${tizenrt_dir}/external/iotivity-constrained/Make.defs: ${top_dir}/port/tizenrt/scripts/Make.defs ${tizenrt_dir}/external/iotivity-constrained
++	ls $@ || ln -fs $< $@
++
++${tizenrt_dir}/external/iotivity-constrained/Makefile: ${top_dir}/port/tizenrt/scripts/Makefile ${tizenrt_dir}/external/iotivity-constrained
++	ls $@ || ln -fs $< $@
++
+-- 
+2.16.1.windows.1
+
